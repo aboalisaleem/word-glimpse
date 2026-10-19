@@ -1,40 +1,43 @@
 export default function Card({ cardData }) {
   return (
-    <div className="w-80 bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-      {/* Header */}
-      <div className="bg-blue-600 text-white p-4 text-center">
-        <h2 className="text-3xl font-bold">{cardData.word}</h2>
-        <p className="text-blue-200 text-sm mt-1 uppercase tracking-wide">
-          {cardData.partOfSpeech} • Tier {cardData.difficulty}
-        </p>
-      </div>
+    <div className="w-80 bg-[#1a202c] rounded-[2rem] p-6 border border-slate-700/50 shadow-2xl relative overflow-hidden">
+      {/* Background Glow Accent */}
+      <div className="absolute -top-10 -left-10 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full pointer-events-none"></div>
       
-      {/* Image Placeholder */}
-      <div className="h-40 bg-gray-200 flex items-center justify-center text-gray-500 italic">
-        [ Image: {cardData.imageUrl} ]
+      {/* Header */}
+      <div className="text-center relative z-10 mb-6 mt-2">
+        <h2 className="text-3xl font-black text-white tracking-wide mb-3 drop-shadow-md">{cardData.word}</h2>
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-[10px] bg-[#0f141e] text-cyan-400 px-3 py-1 rounded-lg font-bold uppercase tracking-widest border border-cyan-900/50">
+            {cardData.partOfSpeech}
+          </span>
+          <span className="text-[10px] bg-[#0f141e] text-orange-400 px-3 py-1 rounded-lg font-bold uppercase tracking-widest border border-orange-900/50">
+            Tier {cardData.difficulty}
+          </span>
+        </div>
       </div>
 
-      {/* Body - Word Meaning (NEW) */}
-      <div className="p-4 bg-blue-50 border-b border-gray-100 text-center">
-        <p className="text-sm text-blue-800 font-semibold uppercase tracking-wider mb-1">Meaning</p>
-        <p className="text-gray-700 text-sm">{cardData.meaning}</p>
+      {/* Meaning Box */}
+      <div className="bg-[#0f141e] rounded-2xl p-4 mb-4 border border-slate-700/50 relative z-10 text-center shadow-inner">
+        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1.5">Meaning</p>
+        <p className="text-sm text-slate-300 font-medium">{cardData.meaning}</p>
       </div>
-      
-      {/* Body - Sentence Hint */}
-      <div className="p-5 border-b border-gray-100">
-        <p className="text-gray-800 text-center font-medium text-lg leading-snug">
+
+      {/* Sentence Hint */}
+      <div className="bg-[#0f141e] rounded-2xl p-5 mb-6 border border-slate-700/50 relative z-10 text-center shadow-inner">
+        <p className="text-sm text-white font-medium italic leading-relaxed">
           "{cardData.sentenceHint}"
         </p>
       </div>
-      
-      {/* Footer - Forbidden Words */}
-      <div className="p-4 bg-red-50">
-        <p className="text-xs text-red-600 font-bold uppercase tracking-wider mb-2 text-center">
+
+      {/* Forbidden Words */}
+      <div className="relative z-10 pt-2 border-t border-slate-700/50">
+        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-3 text-center">
           Forbidden Words
         </p>
         <div className="flex flex-wrap gap-2 justify-center">
           {cardData.forbiddenWords.map((word, index) => (
-            <span key={index} className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+            <span key={index} className="bg-red-500/10 text-red-400 px-3 py-1.5 rounded-xl text-xs font-bold border border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.1)] uppercase tracking-wide">
               {word}
             </span>
           ))}
