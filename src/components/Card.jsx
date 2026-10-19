@@ -1,10 +1,8 @@
 export default function Card({ cardData }) {
   return (
     <div className="w-80 bg-[#1a202c] rounded-[2rem] p-6 border border-slate-700/50 shadow-2xl relative overflow-hidden">
-      {/* Background Glow Accent */}
       <div className="absolute -top-10 -left-10 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full pointer-events-none"></div>
       
-      {/* Header */}
       <div className="text-center relative z-10 mb-6 mt-2">
         <h2 className="text-3xl font-black text-white tracking-wide mb-3 drop-shadow-md">{cardData.word}</h2>
         <div className="flex items-center justify-center gap-2">
@@ -17,20 +15,17 @@ export default function Card({ cardData }) {
         </div>
       </div>
 
-      {/* Meaning Box */}
       <div className="bg-[#0f141e] rounded-2xl p-4 mb-4 border border-slate-700/50 relative z-10 text-center shadow-inner">
         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1.5">Meaning</p>
         <p className="text-sm text-slate-300 font-medium">{cardData.meaning}</p>
       </div>
 
-      {/* Sentence Hint */}
       <div className="bg-[#0f141e] rounded-2xl p-5 mb-6 border border-slate-700/50 relative z-10 text-center shadow-inner">
         <p className="text-sm text-white font-medium italic leading-relaxed">
           "{cardData.sentenceHint}"
         </p>
       </div>
 
-      {/* Forbidden Words */}
       <div className="relative z-10 pt-2 border-t border-slate-700/50">
         <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-3 text-center">
           Forbidden Words
