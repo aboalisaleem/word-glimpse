@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Lobby from './views/Lobby';
 import ClueGiver from './views/ClueGiver';
 import Guesser from './views/Guesser';
+import Rating from './views/Rating'; 
 
 export default function App() {
   const [inGame, setInGame] = useState(false);
