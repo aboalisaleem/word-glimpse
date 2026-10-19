@@ -1,0 +1,29 @@
+[
+  {
+    "id": "w1",
+    "word": "Lighthouse",
+    "partOfSpeech": "noun",
+    "difficulty": "C",
+    "imageUrl": "/lighthouse.png",
+    "sentenceHint": "The ships avoided the rocky coast because the [ ______ ] guided them.",
+    "forbiddenWords": ["Tower", "Ocean", "Beam"]
+  },
+  {
+    "id": "w2",
+    "word": "Reluctant",
+    "partOfSpeech": "adjective",
+    "difficulty": "B",
+    "imageUrl": "/reluctant.png",
+    "sentenceHint": "He was [ ______ ] to leave his warm bed on a freezing Monday morning.",
+    "forbiddenWords": ["Hesitate", "Unwilling", "Slow"]
+  },
+  {
+    "id": "w3",
+    "word": "Metaphor",
+    "partOfSpeech": "noun",
+    "difficulty": "A",
+    "imageUrl": "/metaphor.png",
+    "sentenceHint": "Calling someone a 'night owl' is a common [ ______ ] for staying up late.",
+    "forbiddenWords": ["Simile", "Figurative", "Like"]
+  }
+]
