@@ -13,6 +13,12 @@ export default function Card({ cardData }) {
       <div className="h-40 bg-gray-200 flex items-center justify-center text-gray-500 italic">
         [ Image: {cardData.imageUrl} ]
       </div>
+
+      {/* Body - Word Meaning (NEW) */}
+      <div className="p-4 bg-blue-50 border-b border-gray-100 text-center">
+        <p className="text-sm text-blue-800 font-semibold uppercase tracking-wider mb-1">Meaning</p>
+        <p className="text-gray-700 text-sm">{cardData.meaning}</p>
+      </div>
       
       {/* Body - Sentence Hint */}
       <div className="p-5 border-b border-gray-100">
