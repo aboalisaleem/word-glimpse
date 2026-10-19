@@ -1,10 +1,11 @@
 [
-  {
+{
     "id": "w1",
     "word": "Lighthouse",
     "partOfSpeech": "noun",
     "difficulty": "C",
     "imageUrl": "/lighthouse.png",
+    "meaning": "A tall tower with a very strong light used to guide ships away from danger.",
     "sentenceHint": "The ships avoided the rocky coast because the [ ______ ] guided them.",
     "forbiddenWords": ["Tower", "Ocean", "Beam"]
   },
