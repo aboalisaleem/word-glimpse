@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import Lobby from './views/Lobby';
-import Card from './components/Card';
-import vocabulary from './data/vocabulary.json';
+import ClueGiver from './views/ClueGiver';
 
 export default function App() {
   // State machine: tracks if the user is in the lobby or actively playing
@@ -17,15 +16,15 @@ export default function App() {
     );
   }
 
-  // If they clicked Create or Join, render the Game view.
+  // If they clicked Create or Join, render the Clue-Giver view.
   return (
-    <div className="flex flex-col min-h-screen items-center justify-center bg-slate-50 p-4">
-      <Card cardData={vocabulary[0]} />
+    <div className="flex flex-col min-h-screen items-center bg-slate-50 relative">
+      <ClueGiver />
       
       {/* Temporary button to go back to the lobby during testing */}
       <button 
         onClick={() => setInGame(false)}
-        className="mt-8 text-sm text-gray-500 hover:text-gray-800 underline font-medium"
+        className="absolute top-4 right-4 text-xs text-red-400 hover:text-red-600 underline font-medium"
       >
         Leave Room
       </button>
