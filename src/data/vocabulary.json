@@ -1,12 +1,13 @@
 [
-{
+  {
     "id": "w1",
     "word": "Lighthouse",
     "partOfSpeech": "noun",
     "difficulty": "C",
-    "imageUrl": "/lighthouse.png",
-    "meaning": "A tall tower with a very strong light used to guide ships away from danger.",
-    "sentenceHint": "The ships avoided the rocky coast because the [ ______ ] guided them.",
+    "points": 1,
+    "imageUrl": "🗼🌊",
+    "meaning": "A tall tower with a very strong light used to guide ships away from danger at sea.",
+    "sentenceHint": "The ships avoided the rocky coast because the [ ______ ] guided them safely.",
     "forbiddenWords": ["Tower", "Ocean", "Beam"]
   },
   {
@@ -14,7 +15,9 @@
     "word": "Reluctant",
     "partOfSpeech": "adjective",
     "difficulty": "B",
-    "imageUrl": "/reluctant.png",
+    "points": 2,
+    "imageUrl": "🥶🛌",
+    "meaning": "Feeling unwilling and hesitating to do something because you are unsure or dislike it.",
     "sentenceHint": "He was [ ______ ] to leave his warm bed on a freezing Monday morning.",
     "forbiddenWords": ["Hesitate", "Unwilling", "Slow"]
   },
@@ -23,8 +26,10 @@
     "word": "Metaphor",
     "partOfSpeech": "noun",
     "difficulty": "A",
-    "imageUrl": "/metaphor.png",
+    "points": 3,
+    "imageUrl": "🦉🌙",
+    "meaning": "A figure of speech that describes an object or action in a way that isn't literally true, to make a comparison.",
     "sentenceHint": "Calling someone a 'night owl' is a common [ ______ ] for staying up late.",
-    "forbiddenWords": ["Simile", "Figurative", "Like"]
+    "forbiddenWords": ["Simile", "Figurative", "Compare"]
   }
 ]
