@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const vocabulary = require('../src/data/vocabulary.json');
 
 const app = express();
 app.use(cors());
@@ -13,15 +14,13 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173', // Your Vite React frontend
+    origin: 'http://localhost:5173',
     methods: ['GET', 'POST']
   }
 });
 
-// In-memory store for active game rooms
 const rooms = {};
 
-// Helper: Generate a unique 6-character uppercase room code
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -31,13 +30,30 @@ function generateRoomCode() {
   return rooms[code] ? generateRoomCode() : code;
 }
 
+// Helper: Filter vocabulary by host's selected tier
+function getFilteredDeck(tierFilter) {
+  let filtered = vocabulary;
+  if (tierFilter === 'Just A') filtered = vocabulary.filter((w) => w.difficulty === 'A');
+  else if (tierFilter === 'Just B') filtered = vocabulary.filter((w) => w.difficulty === 'B');
+  else if (tierFilter === 'Just C') filtered = vocabulary.filter((w) => w.difficulty === 'C');
+  else if (tierFilter === 'A & B') filtered = vocabulary.filter((w) => ['A', 'B'].includes(w.difficulty));
+  else if (tierFilter === 'B & C') filtered = vocabulary.filter((w) => ['B', 'C'].includes(w.difficulty));
+
+  // Shuffle deck (Fisher-Yates)
+  const deck = [...filtered];
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
 io.on('connection', (socket) => {
   console.log(`Player connected: ${socket.id}`);
 
-  // 1. Create a new room
+  // 1. Create Room
   socket.on('create_room', ({ player, settings }) => {
     const roomCode = generateRoomCode();
-
     rooms[roomCode] = {
       roomCode,
       hostId: socket.id,
@@ -56,7 +72,14 @@ io.on('connection', (socket) => {
           score: 0,
           isHost: true
         }
-      ]
+      ],
+      deck: [],
+      cardIndex: 0,
+      currentCard: null,
+      clueGiverIndex: 0,
+      clueGiver: null,
+      answeringPlayer: null,
+      triedPlayerIds: []
     };
 
     socket.join(roomCode);
@@ -64,7 +87,7 @@ io.on('connection', (socket) => {
     console.log(`Room ${roomCode} created by ${player.name}`);
   });
 
-  // 2. Join an existing room
+  // 2. Join Room
   socket.on('join_room', ({ roomCode, player }) => {
     const code = roomCode?.trim().toUpperCase();
     const room = rooms[code];
@@ -73,29 +96,25 @@ io.on('connection', (socket) => {
       socket.emit('room_error', { message: 'Room not found. Check the code and try again.' });
       return;
     }
-
     if (room.players.length >= 8) {
       socket.emit('room_error', { message: 'Room is full (max 8 players).' });
       return;
     }
 
-    const newPlayer = {
+    room.players.push({
       id: socket.id,
       name: player.name,
       avatar: player.avatar,
       score: 0,
       isHost: false
-    };
+    });
 
-    room.players.push(newPlayer);
     socket.join(code);
-
-    // Send updated room state to everyone in the room
     io.to(code).emit('room_updated', room);
     console.log(`${player.name} joined room ${code}`);
   });
 
-  // 3. Host updates room settings in WaitingRoom
+  // 3. Update Settings
   socket.on('update_settings', ({ roomCode, settings }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -104,22 +123,100 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', room);
   });
 
-  // 4. Handle player disconnect
+  // 4. Start Match (Host Only)
+  socket.on('start_game', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (!room || room.hostId !== socket.id) return;
+
+    room.deck = getFilteredDeck(room.settings.tierFilter);
+    room.cardIndex = 0;
+    room.currentCard = room.deck[0];
+    room.clueGiverIndex = 0;
+    room.clueGiver = room.players[0];
+    room.answeringPlayer = null;
+    room.triedPlayerIds = [];
+    room.phase = 'playing';
+
+    io.to(roomCode).emit('room_updated', room);
+    console.log(`Match started in room ${roomCode} | Card: ${room.currentCard.word}`);
+  });
+
+  // 5. Real-Time Buzzer Lock
+  socket.on('buzz_in', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    // Reject if not playing or someone already locked the buzzer
+    if (!room || room.phase !== 'playing' || room.answeringPlayer) return;
+
+    const player = room.players.find((p) => p.id === socket.id);
+    if (!player || player.id === room.clueGiver?.id) return;
+
+    room.answeringPlayer = { id: player.id, name: player.name, avatar: player.avatar };
+    io.to(roomCode).emit('room_updated', room);
+    console.log(`${player.name} buzzed in first in room ${roomCode}`);
+  });
+
+  // 6. Clue-Giver Judges Answer (Correct / Incorrect / Skip)
+  socket.on('judge_answer', ({ roomCode, result }) => {
+    const room = rooms[roomCode];
+    if (!room || room.clueGiver?.id !== socket.id) return;
+
+    if (result === 'correct' && room.answeringPlayer) {
+      const winner = room.players.find((p) => p.id === room.answeringPlayer.id);
+      if (winner) {
+        const basePoints = room.currentCard.difficulty === 'A' ? 3 : room.currentCard.difficulty === 'B' ? 2 : 1;
+        winner.score += basePoints;
+      }
+      room.answeringPlayer = null;
+      room.phase = 'reveal';
+    } else if (result === 'incorrect' && room.answeringPlayer) {
+      const guesser = room.players.find((p) => p.id === room.answeringPlayer.id);
+      // Flat 0.5pt consolation capped once per card
+      if (guesser && !room.triedPlayerIds.includes(guesser.id)) {
+        guesser.score += 0.5;
+        room.triedPlayerIds.push(guesser.id);
+      }
+      room.answeringPlayer = null; // Unlock buzzer for other players
+    } else if (result === 'skip') {
+      room.answeringPlayer = null;
+      room.phase = 'reveal';
+    }
+
+    io.to(roomCode).emit('room_updated', room);
+  });
+
+  // 7. Advance Phase (Reveal -> Rating -> Next Round / Summary)
+  socket.on('advance_phase', ({ roomCode, nextPhase }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+
+    if (nextPhase === 'next_round') {
+      room.cardIndex += 1;
+      room.currentCard = room.deck[room.cardIndex % room.deck.length];
+      room.clueGiverIndex = (room.clueGiverIndex + 1) % room.players.length;
+      room.clueGiver = room.players[room.clueGiverIndex];
+      room.answeringPlayer = null;
+      room.triedPlayerIds = [];
+      room.phase = 'playing';
+    } else {
+      room.phase = nextPhase;
+    }
+
+    io.to(roomCode).emit('room_updated', room);
+  });
+
+  // 8. Handle Disconnect
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
-
     for (const code of Object.keys(rooms)) {
       const room = rooms[code];
       const index = room.players.findIndex((p) => p.id === socket.id);
 
       if (index !== -1) {
         room.players.splice(index, 1);
-
         if (room.players.length === 0) {
           delete rooms[code];
           console.log(`Room ${code} deleted (empty)`);
         } else {
-          // Reassign host if the host left
           if (room.hostId === socket.id) {
             room.hostId = room.players[0].id;
             room.players[0].isHost = true;

@@ -45,7 +45,7 @@ export default function App() {
   // Active Gameplay States
   const [cardIndex, setCardIndex] = useState(0);
   const [activeClueGiver, setActiveClueGiver] = useState({ name: 'HollyDesign', avatar: '🐰' });
-  const [answeringPlayer, setAnsweringPlayer] = useState(null); // null or { name, avatar }
+  const [answeringPlayer, setAnsweringPlayer] = useState(null); // null or { id, name, avatar }
   const [knownWordIds, setKnownWordIds] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
@@ -78,7 +78,7 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', listener);
   }, [theme]);
 
-  // Socket.io Real-Time Room Listeners
+  // Socket.io Real-Time Room & Gameplay Listeners
   useEffect(() => {
     socket.on('room_created', (newRoom) => {
       setRoom(newRoom);
@@ -94,8 +94,15 @@ export default function App() {
       setRoom(updatedRoom);
       setRoomSettings({ ...updatedRoom.settings, roomCode: updatedRoom.roomCode });
       setIsAdmin(updatedRoom.hostId === socket.id);
+      setCurrentPhase(updatedRoom.phase);
+      setAnsweringPlayer(updatedRoom.answeringPlayer || null);
+
+      if (updatedRoom.clueGiver) {
+        setActiveClueGiver(updatedRoom.clueGiver);
+        setRole(updatedRoom.clueGiver.id === socket.id ? 'cluegiver' : 'guesser');
+      }
+
       setRoomError('');
-      setCurrentPhase('waiting');
     });
 
     socket.on('room_error', ({ message }) => {
@@ -146,7 +153,8 @@ export default function App() {
     }
   };
 
-  const activeCard = vocabulary[cardIndex % vocabulary.length];
+  // Use the server's active card when in a live room, fallback to local deck for dev testing
+  const activeCard = room?.currentCard || vocabulary[cardIndex % vocabulary.length];
 
   const navigateToSubPage = (targetPhase) => {
     if (!['profile', 'settings', 'policy'].includes(currentPhase)) {
@@ -274,8 +282,7 @@ export default function App() {
                 roomSettings={roomSettings}
                 setRoomSettings={handleUpdateSettings}
                 onStartGame={() => {
-                  setAnsweringPlayer(null);
-                  setCurrentPhase('playing');
+                  socket.emit('start_game', { roomCode: room?.roomCode });
                 }}
                 onLeaveRoom={() => setCurrentPhase('lobby')}
               />
@@ -292,15 +299,22 @@ export default function App() {
                     setAnsweringPlayer({ name: 'SuperMario', avatar: '🍄' })
                   }
                   onJudgeCorrect={() => {
-                    setAnsweringPlayer(null);
-                    setCurrentPhase('reveal');
+                    socket.emit('judge_answer', {
+                      roomCode: room?.roomCode,
+                      result: 'correct'
+                    });
                   }}
                   onJudgeIncorrect={() => {
-                    setAnsweringPlayer(null);
+                    socket.emit('judge_answer', {
+                      roomCode: room?.roomCode,
+                      result: 'incorrect'
+                    });
                   }}
                   onSkipCard={() => {
-                    setAnsweringPlayer(null);
-                    setCurrentPhase('reveal');
+                    socket.emit('judge_answer', {
+                      roomCode: room?.roomCode,
+                      result: 'skip'
+                    });
                   }}
                 />
               ) : (
@@ -309,9 +323,9 @@ export default function App() {
                   clueGiver={activeClueGiver}
                   roomSettings={roomSettings}
                   answeringPlayer={answeringPlayer}
-                  onBuzz={() =>
-                    setAnsweringPlayer({ name: user.name, avatar: user.avatar })
-                  }
+                  onBuzz={() => {
+                    socket.emit('buzz_in', { roomCode: room?.roomCode });
+                  }}
                 />
               )
             )}
@@ -322,7 +336,12 @@ export default function App() {
                 cardData={activeCard}
                 isKnown={knownWordIds.includes(activeCard.id)}
                 onMarkKnown={() => handleMarkKnown(activeCard.id)}
-                onNext={() => setCurrentPhase('rating')}
+                onNext={() => {
+                  socket.emit('advance_phase', {
+                    roomCode: room?.roomCode,
+                    nextPhase: 'rating'
+                  });
+                }}
               />
             )}
 
@@ -331,8 +350,10 @@ export default function App() {
                 clueGiver={activeClueGiver}
                 word={activeCard.word}
                 onSubmitRating={() => {
-                  setCardIndex((prev) => prev + 1);
-                  setCurrentPhase('summary');
+                  socket.emit('advance_phase', {
+                    roomCode: room?.roomCode,
+                    nextPhase: 'next_round'
+                  });
                 }}
               />
             )}
