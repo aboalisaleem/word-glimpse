@@ -1,129 +1,129 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
-export default function Rating({ clueGiver, word, onSubmitRating }) {
-  const [rating, setRating] = useState(8);
+export default function Rating({
+  role = 'guesser',
+  clueGiver = { name: 'Clue-Giver', avatar: '🎤' },
+  word = 'Word',
+  timeLeft = 25,
+  hasSubmitted = false,
+  submittedCount = 0,
+  totalGuessers = 1,
+  onSubmitRating
+}) {
+  const [selectedScore, setSelectedScore] = useState(8);
   const [feedback, setFeedback] = useState('');
-  const [secondsLeft, setSecondsLeft] = useState(25);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          onSubmitRating({ rating, feedback });
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [rating, feedback, onSubmitRating]);
+  const progressPercent = Math.max(0, Math.min(100, (timeLeft / 25) * 100));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmitRating?.(selectedScore, feedback);
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full space-y-5 animate-fade-in">
-      {/* Top 25s Intermission Countdown Header */}
-      <div className="w-full bg-white dark:bg-[#1a202c] p-4 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-lg space-y-3">
+    <div className="w-full space-y-5 animate-fade-in-up">
+      {/* 25-Second Synced Countdown Bar */}
+      <div className="bg-white dark:bg-[#1a202c] rounded-3xl p-5 border border-slate-200 dark:border-slate-700/50 shadow-xl space-y-3">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl">{clueGiver.avatar}</span>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Rate Clue-Giver's Explanation
-              </span>
-              <span className="text-sm font-black text-cyan-600 dark:text-cyan-400">
-                {clueGiver.name}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-slate-100 dark:bg-[#0f141e] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-2">
-            <span className="text-[10px] text-orange-500 font-black uppercase tracking-widest animate-pulse">
-              Ending In
-            </span>
-            <span className="text-lg font-mono font-black text-slate-900 dark:text-white">
-              0:{secondsLeft < 10 ? `0${secondsLeft}` : secondsLeft}
-            </span>
-          </div>
+          <span className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">
+            ⭐ 25s Peer Review Window
+          </span>
+          <span
+            className={`text-lg font-mono font-black ${
+              timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-slate-900 dark:text-white'
+            }`}
+          >
+            0:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
+          </span>
         </div>
 
-        {/* Visual Progress Bar */}
-        <div className="w-full h-1.5 bg-slate-200 dark:bg-[#0f141e] rounded-full overflow-hidden">
+        <div className="w-full h-2.5 bg-slate-200 dark:bg-[#0f141e] rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-cyan-400 to-orange-500 transition-all duration-1000"
-            style={{ width: `${(secondsLeft / 25) * 100}%` }}
-          ></div>
+            className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-1000 ease-linear"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
       </div>
 
-      {/* Target Word Reminder */}
-      <div className="w-full bg-white dark:bg-[#1a202c] rounded-3xl p-5 border border-slate-200 dark:border-slate-700/50 shadow-xl text-center relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">
-          Explained Word
-        </p>
-        <p className="text-3xl font-black text-slate-900 dark:text-white tracking-wide">
-          {word}
-        </p>
-      </div>
-
-      {/* 1-10 Interactive Rating & Feedback Box */}
-      <div className="w-full bg-white dark:bg-[#1a202c] rounded-3xl p-6 border border-slate-200 dark:border-slate-700/50 shadow-2xl space-y-6">
-        <div>
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Select Score (1–10)
-            </span>
-            <span className="text-2xl font-black text-cyan-500 dark:text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">
-              {rating} / 10
-            </span>
+      {/* Clue-Giver Waiting View OR Guesser Rating Form */}
+      {role === 'cluegiver' ? (
+        <div className="bg-white dark:bg-[#1a202c] rounded-3xl p-8 border border-slate-200 dark:border-slate-700/50 shadow-2xl text-center space-y-4">
+          <div className="w-12 h-12 mx-auto border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
+          <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-wider">
+            Players Are Rating Your Clue!
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Word: <span className="font-bold text-cyan-500">{word}</span>
+          </p>
+          <div className="inline-block bg-slate-100 dark:bg-[#0f141e] px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-black text-cyan-500">
+            {submittedCount} / {totalGuessers} Ratings Submitted
+          </div>
+        </div>
+      ) : hasSubmitted ? (
+        <div className="bg-white dark:bg-[#1a202c] rounded-3xl p-8 border border-slate-200 dark:border-slate-700/50 shadow-2xl text-center space-y-3">
+          <div className="text-4xl">✅</div>
+          <h2 className="text-lg font-black text-emerald-500 uppercase tracking-wider">
+            Rating Submitted!
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Waiting for other players ({submittedCount} / {totalGuessers})...
+          </p>
+        </div>
+      ) : (
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white dark:bg-[#1a202c] rounded-3xl p-6 border border-slate-200 dark:border-slate-700/50 shadow-2xl space-y-5"
+        >
+          <div className="text-center space-y-1">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Rate {clueGiver.avatar} {clueGiver.name}'s Explanation
+            </p>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-wide">
+              "{word}"
+            </h2>
           </div>
 
-          {/* 10 Interactive Rating Buttons */}
-          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+          {/* 1-10 Interactive Rating Grid */}
+          <div className="grid grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
               <button
                 key={num}
                 type="button"
-                onClick={() => setRating(num)}
-                className={`py-2.5 rounded-xl font-black text-xs border transition-all ${
-                  rating === num
-                    ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.5)] scale-105'
-                    : 'bg-slate-50 dark:bg-[#0f141e] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-cyan-400'
+                onClick={() => setSelectedScore(num)}
+                className={`py-3 rounded-xl font-black text-sm transition-all border ${
+                  selectedScore === num
+                    ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-105'
+                    : 'bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-cyan-500/50'
                 }`}
               >
                 {num}
               </button>
             ))}
           </div>
-          <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 px-1">
-            <span>1 = Confusing</span>
-            <span>10 = Masterpiece</span>
+
+          {/* Optional Written Feedback */}
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">
+              Optional Feedback
+            </label>
+            <input
+              type="text"
+              maxLength={140}
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="Great hint! / Too fast..."
+              className="w-full bg-slate-50 dark:bg-[#0f141e] text-slate-900 dark:text-white text-xs px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 outline-none focus:border-cyan-400"
+            />
           </div>
-        </div>
 
-        <hr className="border-slate-200 dark:border-slate-700/50" />
-
-        {/* Written Feedback */}
-        <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">
-            Optional Written Feedback
-          </label>
-          <textarea
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#0f141e] text-slate-900 dark:text-white px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 focus:border-cyan-400 outline-none transition-all font-medium resize-none h-20 text-xs sm:text-sm"
-            placeholder="Great sentence context! Or try avoiding hand gestures..."
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => onSubmitRating({ rating, feedback })}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] active:scale-95 transition-all text-xs sm:text-sm tracking-widest uppercase"
-        >
-          Submit Peer Rating
-        </button>
-      </div>
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95 text-xs tracking-widest uppercase transition-all"
+          >
+            Submit Rating ({selectedScore}/10)
+          </button>
+        </form>
+      )}
     </div>
   );
 }

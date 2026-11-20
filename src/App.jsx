@@ -15,7 +15,6 @@ import Policy from './views/Policy';
 import socket from './socket';
 
 export default function App() {
-  // Navigation State Machine
   const [currentPhase, setCurrentPhase] = useState('auth');
   const [previousPhase, setPreviousPhase] = useState('auth');
 
@@ -28,7 +27,7 @@ export default function App() {
     avgRating: 8.7,
     matchesWon: 19
   });
-  const [role, setRole] = useState('guesser'); // 'cluegiver' | 'guesser'
+  const [role, setRole] = useState('guesser');
   const [isAdmin, setIsAdmin] = useState(true);
 
   // Room & Match Configuration States
@@ -44,7 +43,7 @@ export default function App() {
 
   // Centralized Server Timer State
   const [timeLeft, setTimeLeft] = useState(45);
-  const [subPhase, setSubPhase] = useState('explanation'); // 'explanation' | 'guessing' | 'rating'
+  const [subPhase, setSubPhase] = useState('explanation');
   const [totalExtended, setTotalExtended] = useState(0);
 
   // Active Gameplay States
@@ -55,10 +54,8 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
 
-  // Theme State: 'system' | 'dark' | 'light'
+  // Theme State
   const [theme, setTheme] = useState(() => localStorage.getItem('wg_theme') || 'dark');
-
-  // Dev Bar Collapse State
   const [devBarOpen, setDevBarOpen] = useState(true);
 
   // Theme Sync Effect
@@ -170,6 +167,8 @@ export default function App() {
   };
 
   const activeCard = room?.currentCard || vocabulary[cardIndex % vocabulary.length];
+  const myLivePlayer = room?.players?.find((p) => p.id === socket.id);
+  const hasSubmittedRating = Boolean(room?.roundRatings && room.roundRatings[socket.id]);
 
   const navigateToSubPage = (targetPhase) => {
     if (!['profile', 'settings', 'policy'].includes(currentPhase)) {
@@ -214,7 +213,7 @@ export default function App() {
                 WORD GLIMPSE
               </span>
               <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 tracking-widest uppercase">
-                لمحة • {user.name}
+                لمحة • {user.name} {myLivePlayer ? `• ${myLivePlayer.score} pts` : ''}
               </span>
             </div>
           </div>
@@ -370,12 +369,18 @@ export default function App() {
 
             {currentPhase === 'rating' && (
               <Rating
+                role={role}
                 clueGiver={activeClueGiver}
                 word={activeCard.word}
-                onSubmitRating={() => {
-                  socket.emit('advance_phase', {
+                timeLeft={timeLeft}
+                hasSubmitted={hasSubmittedRating}
+                submittedCount={Object.keys(room?.roundRatings || {}).length}
+                totalGuessers={Math.max(1, (room?.players?.length || 2) - 1)}
+                onSubmitRating={(score, feedback) => {
+                  socket.emit('submit_rating', {
                     roomCode: room?.roomCode,
-                    nextPhase: 'next_round'
+                    score,
+                    feedback
                   });
                 }}
               />
