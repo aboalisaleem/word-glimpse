@@ -58,7 +58,6 @@ export default function WaitingRoom({
           </div>
         </div>
 
-        {/* Optional QR Placeholder Drawer */}
         {showQrModal && (
           <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex flex-col items-center text-center">
             <div className="w-32 h-32 bg-white p-3 rounded-2xl border-4 border-cyan-400 flex items-center justify-center shadow-lg">
@@ -163,8 +162,8 @@ export default function WaitingRoom({
             </div>
           </div>
 
-          {/* 2. Timer Controls */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* 2. Timers & Match Length */}
+          <div className="grid grid-cols-3 gap-2.5">
             <div>
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
                 2. Clue Time
@@ -174,30 +173,49 @@ export default function WaitingRoom({
                 onChange={(e) =>
                   setRoomSettings({ ...roomSettings, clueTime: Number(e.target.value) })
                 }
-                className="w-full bg-slate-50 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:border-cyan-500"
+                className="w-full bg-slate-50 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs px-2.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:border-cyan-500"
               >
                 <option value={30}>30s</option>
-                <option value={45}>45s (Def)</option>
+                <option value={45}>45s</option>
                 <option value={60}>60s</option>
-                <option value={90}>90s (Max)</option>
+                <option value={90}>90s</option>
               </select>
             </div>
 
             <div>
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                3. Guess Window
+                3. Guess Time
               </label>
               <select
                 value={roomSettings.guessTime}
                 onChange={(e) =>
                   setRoomSettings({ ...roomSettings, guessTime: Number(e.target.value) })
                 }
-                className="w-full bg-slate-50 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:border-cyan-500"
+                className="w-full bg-slate-50 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs px-2.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:border-cyan-500"
               >
                 <option value={30}>30s</option>
-                <option value={60}>60s (Def)</option>
+                <option value={60}>60s</option>
                 <option value={120}>120s</option>
-                <option value={180}>180s (Max)</option>
+                <option value={180}>180s</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                4. Cards
+              </label>
+              <select
+                value={roomSettings.totalRounds || 4}
+                onChange={(e) =>
+                  setRoomSettings({ ...roomSettings, totalRounds: Number(e.target.value) })
+                }
+                className="w-full bg-slate-50 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs px-2.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:border-cyan-500"
+              >
+                <option value={2}>2 Cards</option>
+                <option value={4}>4 Cards</option>
+                <option value={6}>6 Cards</option>
+                <option value={8}>8 Cards</option>
+                <option value={10}>10 Cards</option>
               </select>
             </div>
           </div>
@@ -205,7 +223,7 @@ export default function WaitingRoom({
           {/* 3. Deck Filters */}
           <div>
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">
-              4. Active Deck Tiers
+              5. Active Deck Tiers
             </label>
             <div className="grid grid-cols-3 gap-1.5">
               {TIER_FILTERS.map((filter) => (
@@ -240,7 +258,8 @@ export default function WaitingRoom({
             Waiting for Host to Start...
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            Deck Filter: <span className="text-cyan-400 font-bold">{roomSettings.tierFilter}</span> • Clue Time:{' '}
+            Deck: <span className="text-cyan-400 font-bold">{roomSettings.tierFilter}</span> •{' '}
+            <span className="text-cyan-400 font-bold">{roomSettings.totalRounds || 4} Cards</span> • Clue:{' '}
             <span className="text-cyan-400 font-bold">{roomSettings.clueTime}s</span>
           </p>
         </div>

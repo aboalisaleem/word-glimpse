@@ -38,7 +38,8 @@ export default function App() {
     gameMode: 'glimpse',
     tierFilter: 'ALL',
     clueTime: 45,
-    guessTime: 60
+    guessTime: 60,
+    totalRounds: 4
   });
 
   // Centralized Server Timer State
@@ -138,7 +139,8 @@ export default function App() {
         gameMode: roomSettings.gameMode,
         tierFilter: roomSettings.tierFilter,
         clueTime: roomSettings.clueTime,
-        guessTime: roomSettings.guessTime
+        guessTime: roomSettings.guessTime,
+        totalRounds: roomSettings.totalRounds || 4
       }
     });
   };
@@ -389,10 +391,20 @@ export default function App() {
             {currentPhase === 'summary' && (
               <EndSummary
                 user={user}
+                players={room?.players}
+                myId={socket.id}
+                isAdmin={isAdmin}
+                playedHistory={room?.playedHistory}
                 vocabulary={vocabulary}
                 knownWordIds={knownWordIds}
                 onCreateAccount={() => setCurrentPhase('auth')}
-                onPlayAgain={() => setCurrentPhase('waiting')}
+                onPlayAgain={() => {
+                  if (room?.roomCode) {
+                    socket.emit('play_again', { roomCode: room.roomCode });
+                  } else {
+                    setCurrentPhase('waiting');
+                  }
+                }}
                 onExitToLobby={() => setCurrentPhase('lobby')}
               />
             )}
