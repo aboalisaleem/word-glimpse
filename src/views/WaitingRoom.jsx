@@ -18,6 +18,9 @@ export default function WaitingRoom({
     ? livePlayers
     : [{ name: user.name, avatar: user.avatar, isHost: isAdmin }];
 
+  const cycles = roomSettings.totalRounds || 2;
+  const totalMatchCards = cycles * players.length;
+
   const handleCopyCode = () => {
     navigator.clipboard?.writeText(roomSettings.roomCode);
     setCopied(true);
@@ -162,7 +165,7 @@ export default function WaitingRoom({
             </div>
           </div>
 
-          {/* 2. Timers & Match Length */}
+          {/* 2. Timers & Cycles */}
           <div className="grid grid-cols-3 gap-2.5">
             <div>
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
@@ -202,20 +205,19 @@ export default function WaitingRoom({
 
             <div>
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                4. Cards
+                4. Cycles ({totalMatchCards} Cards)
               </label>
               <select
-                value={roomSettings.totalRounds || 4}
+                value={cycles}
                 onChange={(e) =>
                   setRoomSettings({ ...roomSettings, totalRounds: Number(e.target.value) })
                 }
                 className="w-full bg-slate-50 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs px-2.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:border-cyan-500"
               >
-                <option value={2}>2 Cards</option>
-                <option value={4}>4 Cards</option>
-                <option value={6}>6 Cards</option>
-                <option value={8}>8 Cards</option>
-                <option value={10}>10 Cards</option>
+                <option value={1}>1 Cycle</option>
+                <option value={2}>2 Cycles</option>
+                <option value={3}>3 Cycles</option>
+                <option value={5}>5 Cycles</option>
               </select>
             </div>
           </div>
@@ -259,8 +261,10 @@ export default function WaitingRoom({
           </p>
           <p className="text-xs text-slate-400 mt-1">
             Deck: <span className="text-cyan-400 font-bold">{roomSettings.tierFilter}</span> •{' '}
-            <span className="text-cyan-400 font-bold">{roomSettings.totalRounds || 4} Cards</span> • Clue:{' '}
-            <span className="text-cyan-400 font-bold">{roomSettings.clueTime}s</span>
+            <span className="text-cyan-400 font-bold">
+              {cycles} {cycles === 1 ? 'Cycle' : 'Cycles'} ({totalMatchCards} Cards)
+            </span>{' '}
+            • Clue: <span className="text-cyan-400 font-bold">{roomSettings.clueTime}s</span>
           </p>
         </div>
       )}

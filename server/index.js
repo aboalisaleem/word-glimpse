@@ -101,7 +101,10 @@ function finalizeRatingsAndAdvance(roomCode) {
     room.lastRatingAvg = null;
   }
 
-  const totalRounds = room.settings.totalRounds || 4;
+  // Cycles * number of players = total cards so every player gets equal Clue-Giver turns
+  const cycles = room.settings.totalRounds || 2;
+  const totalRounds = cycles * room.players.length;
+
   if (room.cardIndex + 1 >= totalRounds) {
     room.phase = 'summary';
     room.answeringPlayer = null;
@@ -216,7 +219,7 @@ io.on('connection', (socket) => {
         tierFilter: 'ALL',
         clueTime: 45,
         guessTime: 60,
-        totalRounds: 4
+        totalRounds: 2
       },
       players: [
         {

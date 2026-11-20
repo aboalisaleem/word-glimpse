@@ -39,7 +39,7 @@ export default function App() {
     tierFilter: 'ALL',
     clueTime: 45,
     guessTime: 60,
-    totalRounds: 4
+    totalRounds: 2
   });
 
   // Centralized Server Timer State
@@ -140,7 +140,7 @@ export default function App() {
         tierFilter: roomSettings.tierFilter,
         clueTime: roomSettings.clueTime,
         guessTime: roomSettings.guessTime,
-        totalRounds: roomSettings.totalRounds || 4
+        totalRounds: roomSettings.totalRounds || 2
       }
     });
   };
