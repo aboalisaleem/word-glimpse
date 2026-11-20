@@ -16,7 +16,7 @@ const io = new Server(server, {
   cors: {
     origin: process.env.CLIENT_URL
       ? process.env.CLIENT_URL.split(',').map((u) => u.trim())
-      : ['http://localhost:5173'],
+      : '*',
     methods: ['GET', 'POST']
   }
 });
@@ -41,7 +41,7 @@ function getFilteredDeck(tierFilter) {
   else if (tierFilter === 'A & B') filtered = vocabulary.filter((w) => ['A', 'B'].includes(w.difficulty));
   else if (tierFilter === 'B & C') filtered = vocabulary.filter((w) => ['B', 'C'].includes(w.difficulty));
 
-  const deck = [...filtered];
+  const deck = filtered.length > 0 ? [...filtered] : [...vocabulary];
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -83,6 +83,39 @@ function calculateGuesserPoints(room) {
   return basePoints * speedMultiplier;
 }
 
+function startNextRound(roomCode, keepCurrentCard = false) {
+  const room = rooms[roomCode];
+  if (!room) return;
+
+  if (room.players.length === 0) {
+    stopRoomTimer(roomCode);
+    delete rooms[roomCode];
+    return;
+  }
+
+  if (!keepCurrentCard) {
+    room.cardIndex += 1;
+    room.currentCard = room.deck[room.cardIndex % room.deck.length];
+  } else if (!room.currentCard && room.deck.length > 0) {
+    room.currentCard = room.deck[room.cardIndex % room.deck.length];
+  }
+
+  room.clueGiverIndex = room.clueGiverIndex % room.players.length;
+  room.clueGiver = room.players[room.clueGiverIndex];
+  room.answeringPlayer = null;
+  room.triedPlayerIds = [];
+  room.roundRatings = {};
+  room.phase = 'playing';
+  room.subPhase = 'explanation';
+  room.timeLeft = room.settings.clueTime || 45;
+  room.totalExtended = 0;
+  room.cardElapsed = 0;
+  room.guessElapsed = 0;
+
+  startRoomTimer(roomCode);
+  io.to(roomCode).emit('room_updated', room);
+}
+
 function finalizeRatingsAndAdvance(roomCode) {
   const room = rooms[roomCode];
   if (!room) return;
@@ -104,39 +137,17 @@ function finalizeRatingsAndAdvance(roomCode) {
   }
 
   const cycles = room.settings.totalRounds || 2;
-  const totalRounds = cycles * room.players.length;
+  const totalRounds = cycles * Math.max(1, room.players.length);
 
   if (room.cardIndex + 1 >= totalRounds) {
     room.phase = 'summary';
     room.answeringPlayer = null;
     io.to(roomCode).emit('game_sfx', { type: 'win' });
     io.to(roomCode).emit('room_updated', room);
-    console.log(`Match finished in room ${roomCode}`);
   } else {
-    startNextRound(roomCode);
+    room.clueGiverIndex = (room.clueGiverIndex + 1) % room.players.length;
+    startNextRound(roomCode, false);
   }
-}
-
-function startNextRound(roomCode) {
-  const room = rooms[roomCode];
-  if (!room) return;
-
-  room.cardIndex += 1;
-  room.currentCard = room.deck[room.cardIndex % room.deck.length];
-  room.clueGiverIndex = (room.clueGiverIndex + 1) % room.players.length;
-  room.clueGiver = room.players[room.clueGiverIndex];
-  room.answeringPlayer = null;
-  room.triedPlayerIds = [];
-  room.roundRatings = {};
-  room.phase = 'playing';
-  room.subPhase = 'explanation';
-  room.timeLeft = room.settings.clueTime || 45;
-  room.totalExtended = 0;
-  room.cardElapsed = 0;
-  room.guessElapsed = 0;
-
-  startRoomTimer(roomCode);
-  io.to(roomCode).emit('room_updated', room);
 }
 
 function startRoomTimer(roomCode) {
@@ -200,6 +211,76 @@ function startRoomTimer(roomCode) {
   }, 1000);
 }
 
+function removePlayerFromRoom(socket, requestedRoomCode) {
+  const normalizedCode = requestedRoomCode?.trim().toUpperCase();
+  const room =
+    (normalizedCode && rooms[normalizedCode]) ||
+    Object.values(rooms).find((r) => r.players.some((p) => p.id === socket.id));
+
+  if (!room) return;
+
+  const index = room.players.findIndex((p) => p.id === socket.id);
+  if (index === -1) return;
+
+  const leavingPlayer = room.players[index];
+  const wasClueGiver = room.clueGiver?.id === leavingPlayer.id;
+
+  if (room.answeringPlayer?.id === leavingPlayer.id) {
+    room.answeringPlayer = null;
+  }
+
+  if (room.roundRatings && room.roundRatings[leavingPlayer.id]) {
+    delete room.roundRatings[leavingPlayer.id];
+  }
+
+  room.players.splice(index, 1);
+  socket.leave(room.roomCode);
+
+  if (room.players.length === 0) {
+    stopRoomTimer(room.roomCode);
+    delete rooms[room.roomCode];
+    console.log(`Room ${room.roomCode} deleted (empty)`);
+    return;
+  }
+
+  if (room.hostId === leavingPlayer.id) {
+    room.hostId = room.players[0].id;
+    room.players.forEach((p, idx) => {
+      p.isHost = idx === 0;
+    });
+  }
+
+  if (index < room.clueGiverIndex) {
+    room.clueGiverIndex = Math.max(0, room.clueGiverIndex - 1);
+  } else {
+    room.clueGiverIndex = room.clueGiverIndex % room.players.length;
+  }
+
+  if (room.phase === 'playing') {
+    if (wasClueGiver) {
+      // تمرير الدور فوراً إلى اللاعب التالي دون انتظار بقية اللاعبين
+      startNextRound(room.roomCode, true);
+      return;
+    }
+    room.clueGiver = room.players[room.clueGiverIndex];
+  } else if (room.phase === 'rating') {
+    if (wasClueGiver) {
+      finalizeRatingsAndAdvance(room.roomCode);
+      return;
+    }
+    const totalGuessers = Math.max(1, room.players.length - 1);
+    const submittedCount = Object.keys(room.roundRatings || {}).length;
+    if (submittedCount >= totalGuessers) {
+      finalizeRatingsAndAdvance(room.roomCode);
+      return;
+    }
+  } else {
+    room.clueGiver = room.players[room.clueGiverIndex];
+  }
+
+  io.to(room.roomCode).emit('room_updated', room);
+}
+
 io.on('connection', (socket) => {
   console.log(`Player connected: ${socket.id}`);
 
@@ -244,7 +325,6 @@ io.on('connection', (socket) => {
 
     socket.join(roomCode);
     socket.emit('room_created', rooms[roomCode]);
-    console.log(`Room ${roomCode} created by ${player.name}`);
   });
 
   socket.on('join_room', ({ roomCode, player }) => {
@@ -260,17 +340,23 @@ io.on('connection', (socket) => {
       return;
     }
 
-    room.players.push({
-      id: socket.id,
-      name: player.name,
-      avatar: player.avatar,
-      score: 0,
-      isHost: false
-    });
+    const existingIndex = room.players.findIndex((p) => p.id === socket.id);
+    if (existingIndex === -1) {
+      room.players.push({
+        id: socket.id,
+        name: player.name,
+        avatar: player.avatar,
+        score: 0,
+        isHost: false
+      });
+    }
 
     socket.join(code);
     io.to(code).emit('room_updated', room);
-    console.log(`${player.name} joined room ${code}`);
+  });
+
+  socket.on('leave_room', ({ roomCode } = {}) => {
+    removePlayerFromRoom(socket, roomCode);
   });
 
   socket.on('update_settings', ({ roomCode, settings }) => {
@@ -283,7 +369,7 @@ io.on('connection', (socket) => {
 
   socket.on('start_game', ({ roomCode }) => {
     const room = rooms[roomCode];
-    if (!room || room.hostId !== socket.id) return;
+    if (!room || room.hostId !== socket.id || room.players.length === 0) return;
 
     room.players.forEach((p) => {
       p.score = 0;
@@ -306,7 +392,6 @@ io.on('connection', (socket) => {
 
     startRoomTimer(roomCode);
     io.to(roomCode).emit('room_updated', room);
-    console.log(`Match started in room ${roomCode} | Card: ${room.currentCard.word}`);
   });
 
   socket.on('start_guesser_timer', ({ roomCode }) => {
@@ -341,7 +426,6 @@ io.on('connection', (socket) => {
     room.answeringPlayer = { id: player.id, name: player.name, avatar: player.avatar };
     io.to(roomCode).emit('game_sfx', { type: 'buzz' });
     io.to(roomCode).emit('room_updated', room);
-    console.log(`${player.name} buzzed in first in room ${roomCode}`);
   });
 
   socket.on('judge_answer', ({ roomCode, result }) => {
@@ -353,7 +437,6 @@ io.on('connection', (socket) => {
       if (winner) {
         const earned = calculateGuesserPoints(room);
         winner.score = Number((winner.score + earned).toFixed(1));
-        console.log(`${winner.name} earned +${earned} pts in room ${roomCode}`);
       }
       stopRoomTimer(roomCode);
       recordPlayedCard(room, room.answeringPlayer.id);
@@ -452,26 +535,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
-    for (const code of Object.keys(rooms)) {
-      const room = rooms[code];
-      const index = room.players.findIndex((p) => p.id === socket.id);
-
-      if (index !== -1) {
-        room.players.splice(index, 1);
-        if (room.players.length === 0) {
-          stopRoomTimer(code);
-          delete rooms[code];
-          console.log(`Room ${code} deleted (empty)`);
-        } else {
-          if (room.hostId === socket.id) {
-            room.hostId = room.players[0].id;
-            room.players[0].isHost = true;
-          }
-          io.to(code).emit('room_updated', room);
-        }
-        break;
-      }
-    }
+    removePlayerFromRoom(socket);
   });
 });
 
