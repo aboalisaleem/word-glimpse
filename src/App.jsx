@@ -12,6 +12,7 @@ import EndSummary from './views/EndSummary';
 import Profile from './views/Profile';
 import Settings from './views/Settings';
 import Policy from './views/Policy';
+import socket from './socket';
 
 export default function App() {
   // Navigation State Machine: 'auth' | 'lobby' | 'waiting' | 'playing' | 'reveal' | 'rating' | 'summary' | 'profile' | 'settings' | 'policy'
@@ -31,6 +32,8 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(true);
 
   // Room & Match Configuration States
+  const [room, setRoom] = useState(null);
+  const [roomError, setRoomError] = useState('');
   const [roomSettings, setRoomSettings] = useState({
     roomCode: 'GLMP88',
     gameMode: 'glimpse',
@@ -53,6 +56,7 @@ export default function App() {
   // Dev Bar Collapse State
   const [devBarOpen, setDevBarOpen] = useState(true);
 
+  // Theme Sync Effect
   useEffect(() => {
     const root = window.document.documentElement;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -73,6 +77,74 @@ export default function App() {
     mediaQuery.addEventListener('change', listener);
     return () => mediaQuery.removeEventListener('change', listener);
   }, [theme]);
+
+  // Socket.io Real-Time Room Listeners
+  useEffect(() => {
+    socket.on('room_created', (newRoom) => {
+      setRoom(newRoom);
+      setRoomSettings({ ...newRoom.settings, roomCode: newRoom.roomCode });
+      setIsAdmin(true);
+      setRole('cluegiver');
+      setAnsweringPlayer(null);
+      setRoomError('');
+      setCurrentPhase('waiting');
+    });
+
+    socket.on('room_updated', (updatedRoom) => {
+      setRoom(updatedRoom);
+      setRoomSettings({ ...updatedRoom.settings, roomCode: updatedRoom.roomCode });
+      setIsAdmin(updatedRoom.hostId === socket.id);
+      setRoomError('');
+      setCurrentPhase('waiting');
+    });
+
+    socket.on('room_error', ({ message }) => {
+      setRoomError(message);
+    });
+
+    return () => {
+      socket.off('room_created');
+      socket.off('room_updated');
+      socket.off('room_error');
+    };
+  }, []);
+
+  // Socket.io Room Actions
+  const handleCreateRoom = () => {
+    setRoomError('');
+    socket.emit('create_room', {
+      player: { name: user.name, avatar: user.avatar },
+      settings: {
+        gameMode: roomSettings.gameMode,
+        tierFilter: roomSettings.tierFilter,
+        clueTime: roomSettings.clueTime,
+        guessTime: roomSettings.guessTime
+      }
+    });
+  };
+
+  const handleJoinRoom = (code) => {
+    if (!code?.trim()) {
+      setRoomError('Please enter a room code.');
+      return;
+    }
+    setRoomError('');
+    setRole('guesser');
+    socket.emit('join_room', {
+      roomCode: code,
+      player: { name: user.name, avatar: user.avatar }
+    });
+  };
+
+  const handleUpdateSettings = (newSettings) => {
+    setRoomSettings(newSettings);
+    if (room?.roomCode && isAdmin) {
+      socket.emit('update_settings', {
+        roomCode: room.roomCode,
+        settings: newSettings
+      });
+    }
+  };
 
   const activeCard = vocabulary[cardIndex % vocabulary.length];
 
@@ -179,33 +251,28 @@ export default function App() {
             )}
 
             {currentPhase === 'lobby' && (
-              <Lobby
-                roomSettings={roomSettings}
-                setRoomSettings={setRoomSettings}
-                onCreateGame={() => {
-                  setIsAdmin(true);
-                  setRole('cluegiver');
-                  setAnsweringPlayer(null);
-                  setCurrentPhase('waiting');
-                }}
-                onJoinGame={(enteredCode) => {
-                  if (enteredCode) {
-                    setRoomSettings((prev) => ({ ...prev, roomCode: enteredCode }));
-                  }
-                  setIsAdmin(false);
-                  setRole('guesser');
-                  setAnsweringPlayer(null);
-                  setCurrentPhase('waiting');
-                }}
-              />
+              <>
+                {roomError && (
+                  <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-bold text-center">
+                    ⚠️ {roomError}
+                  </div>
+                )}
+                <Lobby
+                  roomSettings={roomSettings}
+                  setRoomSettings={setRoomSettings}
+                  onCreateGame={handleCreateRoom}
+                  onJoinGame={handleJoinRoom}
+                />
+              </>
             )}
 
             {currentPhase === 'waiting' && (
               <WaitingRoom
                 user={user}
                 isAdmin={isAdmin}
+                players={room?.players}
                 roomSettings={roomSettings}
-                setRoomSettings={setRoomSettings}
+                setRoomSettings={handleUpdateSettings}
                 onStartGame={() => {
                   setAnsweringPlayer(null);
                   setCurrentPhase('playing');
