@@ -14,7 +14,9 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.split(',').map((u) => u.trim())
+      : ['http://localhost:5173'],
     methods: ['GET', 'POST']
   }
 });
@@ -153,7 +155,6 @@ function startRoomTimer(roomCode) {
         room.guessElapsed += 1;
       }
 
-      // 5-minute (300s) hard cap per card
       if (room.cardElapsed >= 300) {
         stopRoomTimer(roomCode);
         recordPlayedCard(room, null);
@@ -202,7 +203,6 @@ function startRoomTimer(roomCode) {
 io.on('connection', (socket) => {
   console.log(`Player connected: ${socket.id}`);
 
-  // 1. Create Room
   socket.on('create_room', ({ player, settings }) => {
     const roomCode = generateRoomCode();
     rooms[roomCode] = {
@@ -247,7 +247,6 @@ io.on('connection', (socket) => {
     console.log(`Room ${roomCode} created by ${player.name}`);
   });
 
-  // 2. Join Room
   socket.on('join_room', ({ roomCode, player }) => {
     const code = roomCode?.trim().toUpperCase();
     const room = rooms[code];
@@ -274,7 +273,6 @@ io.on('connection', (socket) => {
     console.log(`${player.name} joined room ${code}`);
   });
 
-  // 3. Update Settings
   socket.on('update_settings', ({ roomCode, settings }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -283,7 +281,6 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', room);
   });
 
-  // 4. Start Match (Host Only)
   socket.on('start_game', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -312,7 +309,6 @@ io.on('connection', (socket) => {
     console.log(`Match started in room ${roomCode} | Card: ${room.currentCard.word}`);
   });
 
-  // 5. Clue-Giver manually starts Guesser Timer
   socket.on('start_guesser_timer', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'playing' || room.clueGiver?.id !== socket.id) return;
@@ -323,7 +319,6 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', room);
   });
 
-  // 6. Clue-Giver extends Guesser Timer (+30s, max 210s / 3.5m)
   socket.on('extend_timer', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'playing' || room.subPhase !== 'guessing' || room.clueGiver?.id !== socket.id) return;
@@ -336,7 +331,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. Real-Time Buzzer Lock
   socket.on('buzz_in', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'playing' || room.answeringPlayer) return;
@@ -350,7 +344,6 @@ io.on('connection', (socket) => {
     console.log(`${player.name} buzzed in first in room ${roomCode}`);
   });
 
-  // 8. Clue-Giver Judges Answer (Correct / Incorrect / Skip)
   socket.on('judge_answer', ({ roomCode, result }) => {
     const room = rooms[roomCode];
     if (!room || room.clueGiver?.id !== socket.id) return;
@@ -385,7 +378,6 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', room);
   });
 
-  // 9. Advance Phase (Reveal -> Rating)
   socket.on('advance_phase', ({ roomCode, nextPhase }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -405,7 +397,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 10. Submit 1-10 Peer Rating for Clue-Giver
   socket.on('submit_rating', ({ roomCode, score, feedback }) => {
     const room = rooms[roomCode];
     if (!room || room.phase !== 'rating') return;
@@ -427,7 +418,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 11. Live Floating Emoji Reactions
   socket.on('send_reaction', ({ roomCode, emoji }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -437,11 +427,10 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('receive_reaction', {
       id: `${Date.now()}-${Math.random()}`,
       emoji,
-      left: Math.floor(15 + Math.random() * 70) // Random horizontal % position
+      left: Math.floor(15 + Math.random() * 70)
     });
   });
 
-  // 12. Play Again (Host resets match back to Waiting Room)
   socket.on('play_again', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -461,7 +450,6 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', room);
   });
 
-  // 13. Handle Disconnect
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
     for (const code of Object.keys(rooms)) {
@@ -487,7 +475,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Word Glimpse server running on http://localhost:${PORT}`);
 });
