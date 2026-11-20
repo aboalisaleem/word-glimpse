@@ -15,7 +15,7 @@ import Policy from './views/Policy';
 import socket from './socket';
 
 export default function App() {
-  // Navigation State Machine: 'auth' | 'lobby' | 'waiting' | 'playing' | 'reveal' | 'rating' | 'summary' | 'profile' | 'settings' | 'policy'
+  // Navigation State Machine
   const [currentPhase, setCurrentPhase] = useState('auth');
   const [previousPhase, setPreviousPhase] = useState('auth');
 
@@ -42,10 +42,15 @@ export default function App() {
     guessTime: 60
   });
 
+  // Centralized Server Timer State
+  const [timeLeft, setTimeLeft] = useState(45);
+  const [subPhase, setSubPhase] = useState('explanation'); // 'explanation' | 'guessing' | 'rating'
+  const [totalExtended, setTotalExtended] = useState(0);
+
   // Active Gameplay States
   const [cardIndex, setCardIndex] = useState(0);
   const [activeClueGiver, setActiveClueGiver] = useState({ name: 'HollyDesign', avatar: '🐰' });
-  const [answeringPlayer, setAnsweringPlayer] = useState(null); // null or { id, name, avatar }
+  const [answeringPlayer, setAnsweringPlayer] = useState(null);
   const [knownWordIds, setKnownWordIds] = useState([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
@@ -78,7 +83,7 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', listener);
   }, [theme]);
 
-  // Socket.io Real-Time Room & Gameplay Listeners
+  // Socket.io Real-Time Room, Gameplay & Timer Listeners
   useEffect(() => {
     socket.on('room_created', (newRoom) => {
       setRoom(newRoom);
@@ -97,12 +102,22 @@ export default function App() {
       setCurrentPhase(updatedRoom.phase);
       setAnsweringPlayer(updatedRoom.answeringPlayer || null);
 
+      if (typeof updatedRoom.timeLeft === 'number') setTimeLeft(updatedRoom.timeLeft);
+      if (updatedRoom.subPhase) setSubPhase(updatedRoom.subPhase);
+      if (typeof updatedRoom.totalExtended === 'number') setTotalExtended(updatedRoom.totalExtended);
+
       if (updatedRoom.clueGiver) {
         setActiveClueGiver(updatedRoom.clueGiver);
         setRole(updatedRoom.clueGiver.id === socket.id ? 'cluegiver' : 'guesser');
       }
 
       setRoomError('');
+    });
+
+    socket.on('timer_tick', ({ timeLeft: serverTime, subPhase: serverSubPhase, totalExtended: serverExt }) => {
+      setTimeLeft(serverTime);
+      if (serverSubPhase) setSubPhase(serverSubPhase);
+      if (typeof serverExt === 'number') setTotalExtended(serverExt);
     });
 
     socket.on('room_error', ({ message }) => {
@@ -112,6 +127,7 @@ export default function App() {
     return () => {
       socket.off('room_created');
       socket.off('room_updated');
+      socket.off('timer_tick');
       socket.off('room_error');
     };
   }, []);
@@ -153,7 +169,6 @@ export default function App() {
     }
   };
 
-  // Use the server's active card when in a live room, fallback to local deck for dev testing
   const activeCard = room?.currentCard || vocabulary[cardIndex % vocabulary.length];
 
   const navigateToSubPage = (targetPhase) => {
@@ -205,7 +220,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Quick Theme Switcher */}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               title="Toggle Light/Dark Mode"
@@ -293,8 +307,16 @@ export default function App() {
                 <ClueGiver
                   user={user}
                   cardData={activeCard}
-                  roomSettings={roomSettings}
+                  timeLeft={timeLeft}
+                  subPhase={subPhase}
+                  totalExtended={totalExtended}
                   answeringPlayer={answeringPlayer}
+                  onStartGuesserTimer={() => {
+                    socket.emit('start_guesser_timer', { roomCode: room?.roomCode });
+                  }}
+                  onExtendTimer={() => {
+                    socket.emit('extend_timer', { roomCode: room?.roomCode });
+                  }}
                   onSimulateBuzz={() =>
                     setAnsweringPlayer({ name: 'SuperMario', avatar: '🍄' })
                   }
@@ -321,7 +343,8 @@ export default function App() {
                 <Guesser
                   user={user}
                   clueGiver={activeClueGiver}
-                  roomSettings={roomSettings}
+                  timeLeft={timeLeft}
+                  subPhase={subPhase}
                   answeringPlayer={answeringPlayer}
                   onBuzz={() => {
                     socket.emit('buzz_in', { roomCode: room?.roomCode });
@@ -419,7 +442,6 @@ export default function App() {
 
           {devBarOpen && (
             <div className="mt-2.5 pt-2 border-t border-slate-800 flex flex-col gap-2">
-              {/* Screen Switcher */}
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[9px] font-bold uppercase text-slate-400 mr-1">Views:</span>
                 {[
@@ -448,7 +470,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Role & State Controls */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="text-[9px] font-bold uppercase text-slate-400">Toggles:</span>
                 <button
