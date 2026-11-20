@@ -138,7 +138,6 @@ export default function App() {
     });
 
     socket.on('receive_reaction', (reaction) => {
-      // Play distinct sound & haptic effect for the emoji
       playEmojiSound(reaction.emoji, soundRef.current, hapticsRef.current);
 
       const enriched = {
@@ -209,7 +208,6 @@ export default function App() {
     if (room?.roomCode) {
       socket.emit('send_reaction', { roomCode: room.roomCode, emoji });
     } else {
-      // Local preview fallback when testing via Dev Debug Bar
       playEmojiSound(emoji, soundEnabled, hapticsEnabled);
       const id = `${Date.now()}-${Math.random()}`;
       setFloatingEmojis((prev) => [
@@ -525,7 +523,11 @@ export default function App() {
       </div>
 
       {/* Collapsible Developer Debug Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 dark:bg-[#0a0d14]/95 backdrop-blur-md border-t border-slate-700/80 text-white px-4 py-2 shadow-2xl">
+      {import.meta.env.DEV && (
+  <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 dark:bg-[#0a0d14]/95 backdrop-blur-md border-t border-slate-700/80 text-white px-4 py-2 shadow-2xl">
+    
+
+<div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 dark:bg-[#0a0d14]/95 backdrop-blur-md border-t border-slate-700/80 text-white px-4 py-2 shadow-2xl">
         <div className="max-w-3xl mx-auto">
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400 flex items-center gap-2">
@@ -610,6 +612,8 @@ export default function App() {
           )}
         </div>
       </div>
+        </div>
+)}
     </div>
   );
 }
