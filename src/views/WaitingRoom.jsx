@@ -5,6 +5,7 @@ const TIER_FILTERS = ['ALL', 'A & B', 'B & C', 'Just A', 'Just B', 'Just C'];
 export default function WaitingRoom({
   user,
   isAdmin,
+  players: livePlayers,
   roomSettings,
   setRoomSettings,
   onStartGame,
@@ -13,12 +14,9 @@ export default function WaitingRoom({
   const [copied, setCopied] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
-  const players = [
-    { name: user.name, avatar: user.avatar, host: isAdmin },
-    { name: 'HollyDesign', avatar: '🐰', host: !isAdmin },
-    { name: 'SuperMario', avatar: '🍄', host: false },
-    { name: 'Luigi99', avatar: '🐢', host: false }
-  ];
+  const players = livePlayers?.length
+    ? livePlayers
+    : [{ name: user.name, avatar: user.avatar, isHost: isAdmin }];
 
   const handleCopyCode = () => {
     navigator.clipboard?.writeText(roomSettings.roomCode);
@@ -96,7 +94,7 @@ export default function WaitingRoom({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-52 overflow-y-auto custom-scrollbar">
           {players.map((player, index) => (
             <div
-              key={index}
+              key={player.id || index}
               className="flex items-center gap-3 bg-slate-50 dark:bg-[#0f141e] p-3 rounded-2xl border border-slate-200 dark:border-slate-700/70"
             >
               <span className="text-xl bg-white dark:bg-slate-800 rounded-xl w-10 h-10 flex items-center justify-center shadow-inner">
@@ -110,7 +108,7 @@ export default function WaitingRoom({
                   ● Connected
                 </span>
               </div>
-              {player.host && (
+              {(player.isHost || player.host) && (
                 <span className="ml-auto text-[9px] bg-blue-500/20 text-blue-500 dark:text-blue-400 px-2 py-1 rounded-lg uppercase font-black border border-blue-500/30">
                   👑 Host
                 </span>
@@ -130,7 +128,7 @@ export default function WaitingRoom({
             <span className="text-[10px] text-slate-400 font-bold">Editable before start</span>
           </div>
 
-          {/* 1. Game Mode Selection (Added Back!) */}
+          {/* 1. Game Mode Selection */}
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">
               1. Select Game Mode
