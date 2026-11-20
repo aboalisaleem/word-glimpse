@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import vocabulary from './data/vocabulary.json';
 import Auth from './views/Auth';
@@ -13,6 +13,7 @@ import Profile from './views/Profile';
 import Settings from './views/Settings';
 import Policy from './views/Policy';
 import socket from './socket';
+import { playSound, playEmojiSound } from './utils/feedback';
 
 export default function App() {
   const [currentPhase, setCurrentPhase] = useState('auth');
@@ -52,8 +53,18 @@ export default function App() {
   const [activeClueGiver, setActiveClueGiver] = useState({ name: 'HollyDesign', avatar: '🐰' });
   const [answeringPlayer, setAnsweringPlayer] = useState(null);
   const [knownWordIds, setKnownWordIds] = useState([]);
+  const [floatingEmojis, setFloatingEmojis] = useState([]);
+
+  // Audio & Haptics Preferences
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const soundRef = useRef(soundEnabled);
+  const hapticsRef = useRef(hapticsEnabled);
+
+  useEffect(() => {
+    soundRef.current = soundEnabled;
+    hapticsRef.current = hapticsEnabled;
+  }, [soundEnabled, hapticsEnabled]);
 
   // Theme State
   const [theme, setTheme] = useState(() => localStorage.getItem('wg_theme') || 'dark');
@@ -81,7 +92,7 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', listener);
   }, [theme]);
 
-  // Socket.io Real-Time Room, Gameplay & Timer Listeners
+  // Socket.io Real-Time Room, Gameplay, Audio & Reactions Listeners
   useEffect(() => {
     socket.on('room_created', (newRoom) => {
       setRoom(newRoom);
@@ -116,6 +127,30 @@ export default function App() {
       setTimeLeft(serverTime);
       if (serverSubPhase) setSubPhase(serverSubPhase);
       if (typeof serverExt === 'number') setTotalExtended(serverExt);
+
+      if (serverTime <= 10 && serverTime > 0) {
+        playSound('tick', soundRef.current, hapticsRef.current);
+      }
+    });
+
+    socket.on('game_sfx', ({ type }) => {
+      playSound(type, soundRef.current, hapticsRef.current);
+    });
+
+    socket.on('receive_reaction', (reaction) => {
+      // Play distinct sound & haptic effect for the emoji
+      playEmojiSound(reaction.emoji, soundRef.current, hapticsRef.current);
+
+      const enriched = {
+        ...reaction,
+        sway: Math.random() > 0.5 ? 24 : -24,
+        rotate: Math.floor(Math.random() * 30) - 15
+      };
+
+      setFloatingEmojis((prev) => [...prev, enriched]);
+      setTimeout(() => {
+        setFloatingEmojis((prev) => prev.filter((item) => item.id !== reaction.id));
+      }, 2200);
     });
 
     socket.on('room_error', ({ message }) => {
@@ -126,6 +161,8 @@ export default function App() {
       socket.off('room_created');
       socket.off('room_updated');
       socket.off('timer_tick');
+      socket.off('game_sfx');
+      socket.off('receive_reaction');
       socket.off('room_error');
     };
   }, []);
@@ -168,6 +205,29 @@ export default function App() {
     }
   };
 
+  const handleSendReaction = (emoji) => {
+    if (room?.roomCode) {
+      socket.emit('send_reaction', { roomCode: room.roomCode, emoji });
+    } else {
+      // Local preview fallback when testing via Dev Debug Bar
+      playEmojiSound(emoji, soundEnabled, hapticsEnabled);
+      const id = `${Date.now()}-${Math.random()}`;
+      setFloatingEmojis((prev) => [
+        ...prev,
+        {
+          id,
+          emoji,
+          left: Math.floor(20 + Math.random() * 60),
+          sway: Math.random() > 0.5 ? 24 : -24,
+          rotate: Math.floor(Math.random() * 30) - 15
+        }
+      ]);
+      setTimeout(() => {
+        setFloatingEmojis((prev) => prev.filter((item) => item.id !== id));
+      }, 2200);
+    }
+  };
+
   const activeCard = room?.currentCard || vocabulary[cardIndex % vocabulary.length];
   const myLivePlayer = room?.players?.find((p) => p.id === socket.id);
   const hasSubmittedRating = Boolean(room?.roundRatings && room.roundRatings[socket.id]);
@@ -198,9 +258,33 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen transition-colors duration-300 bg-slate-100 text-slate-900 dark:bg-[#0f141e] dark:text-slate-100 font-sans selection:bg-cyan-500/30 pb-28 overflow-x-hidden">
+    <div className="min-h-screen transition-colors duration-300 bg-slate-100 text-slate-900 dark:bg-[#0f141e] dark:text-slate-100 font-sans selection:bg-cyan-500/30 pb-28 overflow-x-hidden relative">
+      {/* Live Floating Emoji Overlay with Sway, Scale & Glow */}
+      <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+        <AnimatePresence>
+          {floatingEmojis.map((item) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, y: 0, x: 0, scale: 0.3, rotate: 0 }}
+              animate={{
+                opacity: [0, 1, 1, 0],
+                y: -400,
+                x: [0, item.sway, -item.sway * 0.6, item.sway * 0.3],
+                scale: [0.4, 1.45, 1.15, 0.95],
+                rotate: [0, item.rotate, -item.rotate, 0]
+              }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 2.1, ease: 'easeOut' }}
+              style={{ left: `${item.left}%` }}
+              className="absolute bottom-24 text-5xl drop-shadow-[0_0_16px_rgba(34,211,238,0.65)] select-none"
+            >
+              {item.emoji}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       <div className="flex flex-col items-center w-full max-w-lg mx-auto px-4 pt-5">
-        
         {/* Persistent Top Navigation Bar */}
         <header className="w-full flex justify-between items-center bg-white dark:bg-[#1a202c] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-lg mb-6">
           <div 
@@ -350,6 +434,7 @@ export default function App() {
                   onBuzz={() => {
                     socket.emit('buzz_in', { roomCode: room?.roomCode });
                   }}
+                  onReact={handleSendReaction}
                 />
               )
             )}

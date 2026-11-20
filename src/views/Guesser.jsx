@@ -1,21 +1,42 @@
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+
+const REACTIONS = [
+  { emoji: '🤔', glow: 'rgba(250, 204, 21, 0.6)' },
+  { emoji: '😂', glow: 'rgba(56, 189, 248, 0.6)' },
+  { emoji: '💡', glow: 'rgba(251, 146, 60, 0.6)' },
+  { emoji: '⏳', glow: 'rgba(192, 132, 252, 0.6)' }
+];
+
 export default function Guesser({
   user,
   clueGiver,
   timeLeft = 60,
   subPhase = 'explanation',
   answeringPlayer,
-  onBuzz
+  onBuzz,
+  onReact
 }) {
+  const [burstEmoji, setBurstEmoji] = useState(null);
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  const handleEmojiClick = (emoji) => {
+    setBurstEmoji(emoji);
+    onReact?.(emoji);
+    setTimeout(() => {
+      setBurstEmoji((prev) => (prev === emoji ? null : prev));
+    }, 350);
+  };
+
   const isMeAnswering = answeringPlayer && answeringPlayer.name === user.name;
 
   return (
-    <div className="flex flex-col items-center justify-center w-full space-y-6 animate-fade-in">
+    <div className="flex flex-col items-center justify-center w-full space-y-5 animate-fade-in">
       {/* Top Bar: Active Clue-Giver Avatar & Username + Server-Synced Timer */}
       <div className="w-full bg-white dark:bg-[#1a202c] rounded-2xl p-4 border border-slate-200 dark:border-slate-700/50 shadow-lg flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -47,22 +68,57 @@ export default function Guesser({
       </div>
 
       {/* Mystery Placeholder Card */}
-      <div className="w-full max-w-sm h-64 bg-white dark:bg-[#1a202c] rounded-[2rem] border border-slate-200 dark:border-slate-700/50 shadow-2xl flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      <div className="w-full max-w-sm h-60 bg-white dark:bg-[#1a202c] rounded-[2rem] border border-slate-200 dark:border-slate-700/50 shadow-2xl flex flex-col items-center justify-center p-6 relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none"></div>
         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 blur-3xl rounded-full pointer-events-none"></div>
 
         <p className="relative z-10 text-6xl font-black text-slate-300 dark:text-slate-700 animate-pulse select-none">
           ???
         </p>
-        <p className="relative z-10 mt-6 text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest bg-slate-100 dark:bg-[#0f141e] px-5 py-2 rounded-xl border border-cyan-500/30 shadow-inner">
+        <p className="relative z-10 mt-5 text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest bg-slate-100 dark:bg-[#0f141e] px-5 py-2 rounded-xl border border-cyan-500/30 shadow-inner">
           {subPhase === 'explanation'
             ? `🎧 Listening to ${clueGiver.name}'s Clue...`
             : '⚡ Guessing Window Open! Buzz In!'}
         </p>
       </div>
 
+      {/* Interactive Emoji Reaction Bar with Bounce & Glow Burst */}
+      <div className="w-full flex items-center justify-center gap-3">
+        {REACTIONS.map(({ emoji, glow }) => {
+          const isBursting = burstEmoji === emoji;
+          return (
+            <motion.button
+              key={emoji}
+              type="button"
+              onClick={() => handleEmojiClick(emoji)}
+              whileHover={{ scale: 1.12, y: -2 }}
+              whileTap={{ scale: 0.82 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+              style={{
+                boxShadow: isBursting ? `0 0 24px ${glow}` : undefined
+              }}
+              className={`relative w-14 h-14 rounded-2xl bg-white dark:bg-[#1a202c] border text-2xl flex items-center justify-center cursor-pointer transition-colors ${
+                isBursting
+                  ? 'border-cyan-400 bg-cyan-500/10'
+                  : 'border-slate-200 dark:border-slate-700/70 shadow-md hover:border-cyan-400'
+              }`}
+            >
+              {isBursting && (
+                <motion.span
+                  initial={{ scale: 0.8, opacity: 0.8 }}
+                  animate={{ scale: 1.8, opacity: 0 }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  className="absolute inset-0 rounded-2xl border-2 border-cyan-400 pointer-events-none"
+                />
+              )}
+              <span className="select-none">{emoji}</span>
+            </motion.button>
+          );
+        })}
+      </div>
+
       {/* Buzzer or Live Answering Banner */}
-      <div className="w-full pt-2">
+      <div className="w-full pt-1">
         {answeringPlayer ? (
           <div
             className={`w-full py-8 px-6 rounded-[2rem] shadow-2xl border-4 text-center transition-all ${

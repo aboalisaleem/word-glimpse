@@ -101,13 +101,13 @@ function finalizeRatingsAndAdvance(roomCode) {
     room.lastRatingAvg = null;
   }
 
-  // Cycles * number of players = total cards so every player gets equal Clue-Giver turns
   const cycles = room.settings.totalRounds || 2;
   const totalRounds = cycles * room.players.length;
 
   if (room.cardIndex + 1 >= totalRounds) {
     room.phase = 'summary';
     room.answeringPlayer = null;
+    io.to(roomCode).emit('game_sfx', { type: 'win' });
     io.to(roomCode).emit('room_updated', room);
     console.log(`Match finished in room ${roomCode}`);
   } else {
@@ -345,6 +345,7 @@ io.on('connection', (socket) => {
     if (!player || player.id === room.clueGiver?.id) return;
 
     room.answeringPlayer = { id: player.id, name: player.name, avatar: player.avatar };
+    io.to(roomCode).emit('game_sfx', { type: 'buzz' });
     io.to(roomCode).emit('room_updated', room);
     console.log(`${player.name} buzzed in first in room ${roomCode}`);
   });
@@ -365,6 +366,7 @@ io.on('connection', (socket) => {
       recordPlayedCard(room, room.answeringPlayer.id);
       room.answeringPlayer = null;
       room.phase = 'reveal';
+      io.to(roomCode).emit('game_sfx', { type: 'correct' });
     } else if (result === 'incorrect' && room.answeringPlayer) {
       const guesser = room.players.find((p) => p.id === room.answeringPlayer.id);
       if (guesser && !room.triedPlayerIds.includes(guesser.id)) {
@@ -372,6 +374,7 @@ io.on('connection', (socket) => {
         room.triedPlayerIds.push(guesser.id);
       }
       room.answeringPlayer = null;
+      io.to(roomCode).emit('game_sfx', { type: 'incorrect' });
     } else if (result === 'skip') {
       stopRoomTimer(roomCode);
       recordPlayedCard(room, null);
@@ -424,7 +427,21 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 11. Play Again (Host resets match back to Waiting Room)
+  // 11. Live Floating Emoji Reactions
+  socket.on('send_reaction', ({ roomCode, emoji }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+    const allowed = ['🤔', '😂', '💡', '⏳'];
+    if (!allowed.includes(emoji)) return;
+
+    io.to(roomCode).emit('receive_reaction', {
+      id: `${Date.now()}-${Math.random()}`,
+      emoji,
+      left: Math.floor(15 + Math.random() * 70) // Random horizontal % position
+    });
+  });
+
+  // 12. Play Again (Host resets match back to Waiting Room)
   socket.on('play_again', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || room.hostId !== socket.id) return;
@@ -444,7 +461,7 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', room);
   });
 
-  // 12. Handle Disconnect
+  // 13. Handle Disconnect
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
     for (const code of Object.keys(rooms)) {
