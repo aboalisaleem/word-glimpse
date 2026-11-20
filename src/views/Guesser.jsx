@@ -1,21 +1,11 @@
-import { useState, useEffect } from 'react';
-
 export default function Guesser({
   user,
   clueGiver,
-  roomSettings,
+  timeLeft = 60,
+  subPhase = 'explanation',
   answeringPlayer,
   onBuzz
 }) {
-  const [timeLeft, setTimeLeft] = useState(roomSettings.guessTime || 60);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -26,7 +16,7 @@ export default function Guesser({
 
   return (
     <div className="flex flex-col items-center justify-center w-full space-y-6 animate-fade-in">
-      {/* Top Bar: Active Clue-Giver Avatar & Username + Timer */}
+      {/* Top Bar: Active Clue-Giver Avatar & Username + Server-Synced Timer */}
       <div className="w-full bg-white dark:bg-[#1a202c] rounded-2xl p-4 border border-slate-200 dark:border-slate-700/50 shadow-lg flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-cyan-500/15 border border-cyan-500/40 flex items-center justify-center text-2xl shadow-inner">
@@ -44,9 +34,13 @@ export default function Guesser({
 
         <div className="bg-slate-100 dark:bg-[#0f141e] px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner text-right">
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">
-            Timer
+            {subPhase === 'explanation' ? 'Clue Time' : 'Guess Time'}
           </span>
-          <span className="text-lg font-mono font-black text-orange-500 dark:text-orange-400 tracking-widest">
+          <span
+            className={`text-lg font-mono font-black tracking-widest ${
+              timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-orange-500 dark:text-orange-400'
+            }`}
+          >
             {formatTime(timeLeft)}
           </span>
         </div>
@@ -61,7 +55,9 @@ export default function Guesser({
           ???
         </p>
         <p className="relative z-10 mt-6 text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest bg-slate-100 dark:bg-[#0f141e] px-5 py-2 rounded-xl border border-cyan-500/30 shadow-inner">
-          🎧 Listening to {clueGiver.name}'s Clue...
+          {subPhase === 'explanation'
+            ? `🎧 Listening to ${clueGiver.name}'s Clue...`
+            : '⚡ Guessing Window Open! Buzz In!'}
         </p>
       </div>
 
