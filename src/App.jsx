@@ -13,6 +13,7 @@ import Profile from './views/Profile';
 import Settings from './views/Settings';
 import Policy from './views/Policy';
 import socket from './socket';
+import useVoiceChat from './hooks/useVoiceChat';
 import { playSound, playEmojiSound } from './utils/feedback';
 
 const GUEST_STORAGE_KEY = 'wg_guest_profile';
@@ -180,6 +181,15 @@ export default function App() {
 
   const isInActiveRoom =
     Boolean(room?.roomCode) && ['waiting', 'playing', 'reveal', 'rating'].includes(currentPhase);
+
+  const {
+    isVoiceJoined,
+    isMuted,
+    voiceError,
+    joinVoice,
+    leaveVoice,
+    toggleMute
+  } = useVoiceChat(room?.roomCode, isInActiveRoom);
 
   useEffect(() => {
     if (!isInActiveRoom) return;
@@ -376,6 +386,7 @@ export default function App() {
   };
 
   const confirmLeaveRoom = () => {
+    leaveVoice();
     sessionStorage.removeItem(ACTIVE_ROOM_KEY);
     clearLastActiveRoom();
     setLastActiveRoom(null);
@@ -426,7 +437,6 @@ export default function App() {
     room?.roundRatings && (room.roundRatings[guestId] || room.roundRatings[socket.id])
   );
 
-  // Only show players currently disconnected; disappears immediately when they reconnect
   const awayPlayers = (room?.players || []).filter((p) => p.connected === false);
 
   const connectedGuessersCount = Math.max(
@@ -600,7 +610,43 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+              {isInActiveRoom && (
+                !isVoiceJoined ? (
+                  <button
+                    type="button"
+                    onClick={joinVoice}
+                    title="Join Voice Chat"
+                    className="text-[10px] px-2.5 py-2 rounded-xl font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer"
+                  >
+                    🎙️ Voice
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleMute}
+                      title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
+                      className={`text-[10px] px-2.5 py-2 rounded-xl font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                        isMuted
+                          ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
+                      }`}
+                    >
+                      {isMuted ? '🔇 Muted' : '🎤 Live'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={leaveVoice}
+                      title="Leave Voice Chat"
+                      className="text-[10px] px-2 py-2 rounded-xl font-black bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:border-red-400 transition-all cursor-pointer"
+                    >
+                      📵
+                    </button>
+                  </>
+                )
+              )}
+
               {isInActiveRoom && (
                 <button
                   type="button"
@@ -696,6 +742,12 @@ export default function App() {
             </div>
           )}
         </header>
+
+        {isInActiveRoom && voiceError && (
+          <div className="w-full mb-3 p-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-bold text-center">
+            {voiceError}
+          </div>
+        )}
 
         {isInActiveRoom && (room?.isPausedWaiting || room?.clueGiverGrace) && (
           <div className="w-full space-y-2 mb-4">
@@ -893,6 +945,7 @@ export default function App() {
                   }
                 }}
                 onExitToLobby={() => {
+                  leaveVoice();
                   sessionStorage.removeItem(ACTIVE_ROOM_KEY);
                   clearLastActiveRoom();
                   setLastActiveRoom(null);
@@ -924,6 +977,7 @@ export default function App() {
                 hapticsEnabled={hapticsEnabled}
                 setHapticsEnabled={setHapticsEnabled}
                 onLogout={() => {
+                  leaveVoice();
                   sessionStorage.removeItem(ACTIVE_ROOM_KEY);
                   clearLastActiveRoom();
                   setLastActiveRoom(null);

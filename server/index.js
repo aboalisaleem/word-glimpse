@@ -29,6 +29,7 @@ const rooms = {};
 const roomTimers = {};
 const disconnectTimers = {};
 const clueGiverGraceTimers = {};
+const voiceRooms = {}; // { [roomCode]: Set<socketId> }
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -53,6 +54,18 @@ function getFilteredDeck(tierFilter) {
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   return deck;
+}
+
+function removeSocketFromVoice(socket) {
+  for (const code of Object.keys(voiceRooms)) {
+    if (voiceRooms[code]?.has(socket.id)) {
+      voiceRooms[code].delete(socket.id);
+      socket.to(code).emit('voice_peer_left', { peerId: socket.id });
+      if (voiceRooms[code].size === 0) {
+        delete voiceRooms[code];
+      }
+    }
+  }
 }
 
 function dedupeRoomPlayers(room) {
@@ -81,7 +94,6 @@ function dedupeRoomPlayers(room) {
 
   room.players = Array.from(seenByGuestId.values());
 }
-
 
 function getConnectedPlayers(room) {
   return room.players.filter((p) => p.connected !== false);
@@ -129,6 +141,7 @@ function cleanupRoom(roomCode) {
     Object.values(disconnectTimers[roomCode]).forEach(clearTimeout);
     delete disconnectTimers[roomCode];
   }
+  delete voiceRooms[roomCode];
   delete rooms[roomCode];
   console.log(`Room ${roomCode} deleted (empty)`);
 }
@@ -695,6 +708,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave_room', ({ roomCode, guestId } = {}) => {
+    removeSocketFromVoice(socket);
+
     const code = roomCode?.trim().toUpperCase();
     const room =
       (code && rooms[code]) ||
@@ -914,8 +929,37 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', room);
   });
 
+  // --- WebRTC Voice Signaling ---
+  socket.on('voice_join', ({ roomCode }) => {
+    const code = roomCode?.trim().toUpperCase();
+    if (!code || !rooms[code]) return;
+
+    if (!voiceRooms[code]) {
+      voiceRooms[code] = new Set();
+    }
+
+    const existingPeers = Array.from(voiceRooms[code]).filter((id) => id !== socket.id);
+    voiceRooms[code].add(socket.id);
+
+    socket.emit('voice_peers', { peers: existingPeers });
+    socket.to(code).emit('voice_peer_joined', { peerId: socket.id });
+  });
+
+  socket.on('voice_signal', ({ targetId, signal }) => {
+    if (!targetId || !signal) return;
+    io.to(targetId).emit('voice_signal', {
+      fromId: socket.id,
+      signal
+    });
+  });
+
+  socket.on('voice_leave', () => {
+    removeSocketFromVoice(socket);
+  });
+
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
+    removeSocketFromVoice(socket);
     handleTemporaryDisconnect(socket);
   });
 });
