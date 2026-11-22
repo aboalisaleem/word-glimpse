@@ -15,24 +15,92 @@ import Policy from './views/Policy';
 import socket from './socket';
 import { playSound, playEmojiSound } from './utils/feedback';
 
+const GUEST_STORAGE_KEY = 'wg_guest_profile';
+const GUEST_ID_KEY = 'wg_guest_id';
+const ACTIVE_ROOM_KEY = 'wg_active_room';
+const LAST_ACTIVE_ROOM_KEY = 'wg_last_active_room';
+
+function getOrCreateGuestId() {
+  let id = sessionStorage.getItem(GUEST_ID_KEY);
+  if (!id) {
+    id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `guest-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    sessionStorage.setItem(GUEST_ID_KEY, id);
+  }
+  return id;
+}
+
+function loadSavedGuest() {
+  try {
+    const raw = localStorage.getItem(GUEST_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadLastActiveRoom() {
+  try {
+    const raw = localStorage.getItem(LAST_ACTIVE_ROOM_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastActiveRoom(roomData) {
+  try {
+    if (!roomData?.roomCode) return;
+    localStorage.setItem(
+      LAST_ACTIVE_ROOM_KEY,
+      JSON.stringify({
+        roomCode: roomData.roomCode,
+        phase: roomData.phase || 'playing',
+        updatedAt: Date.now()
+      })
+    );
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearLastActiveRoom() {
+  try {
+    localStorage.removeItem(LAST_ACTIVE_ROOM_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export default function App() {
-  const [currentPhase, setCurrentPhase] = useState('auth');
-  const [previousPhase, setPreviousPhase] = useState('auth');
-  const [hasEnteredGame, setHasEnteredGame] = useState(false);
-  const [wrongWordIds, setWrongWordIds] = useState([]);
-  // Player & Role States
-  const [user, setUser] = useState({
-    name: '\"write your name\"',
-    avatar: '🦁',
+  const savedGuest = useRef(loadSavedGuest()).current;
+  const guestId = useRef(getOrCreateGuestId()).current;
+
+  const [hasEnteredGame, setHasEnteredGame] = useState(() => Boolean(savedGuest?.hasEnteredGame));
+  const [currentPhase, setCurrentPhase] = useState(() =>
+    savedGuest?.hasEnteredGame ? 'lobby' : 'auth'
+  );
+  const [previousPhase, setPreviousPhase] = useState(() =>
+    savedGuest?.hasEnteredGame ? 'lobby' : 'auth'
+  );
+  const [wrongWordIds, setWrongWordIds] = useState(() => savedGuest?.wrongWordIds || []);
+  const [knownWordIds, setKnownWordIds] = useState(() => savedGuest?.knownWordIds || []);
+  const [lastActiveRoom, setLastActiveRoom] = useState(() => loadLastActiveRoom());
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  const [user, setUser] = useState(() => ({
+    name: savedGuest?.user?.name || '',
+    avatar: savedGuest?.user?.avatar || '🦁',
     isGuest: true,
-    wordsLearned: 0,
-    avgRating: 0,
-    matchesWon: 0
-  });
+    wordsLearned: savedGuest?.user?.wordsLearned || 0,
+    avgRating: savedGuest?.user?.avgRating || 0,
+    matchesWon: savedGuest?.user?.matchesWon || 0
+  }));
   const [role, setRole] = useState('guesser');
   const [isAdmin, setIsAdmin] = useState(true);
 
-  // Room & Match Configuration States
   const [room, setRoom] = useState(null);
   const [roomError, setRoomError] = useState('');
   const [roomSettings, setRoomSettings] = useState({
@@ -44,38 +112,51 @@ export default function App() {
     totalRounds: 2
   });
 
-  // Leave Confirmation Modal State
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
-  
 
-  // Centralized Server Timer State
   const [timeLeft, setTimeLeft] = useState(45);
   const [subPhase, setSubPhase] = useState('explanation');
   const [totalExtended, setTotalExtended] = useState(0);
 
-  // Active Gameplay States
   const [cardIndex, setCardIndex] = useState(0);
   const [activeClueGiver, setActiveClueGiver] = useState({ name: 'HollyDesign', avatar: '🐰' });
   const [answeringPlayer, setAnsweringPlayer] = useState(null);
-  const [knownWordIds, setKnownWordIds] = useState([]);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
 
-  // Audio & Haptics Preferences
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const soundRef = useRef(soundEnabled);
   const hapticsRef = useRef(hapticsEnabled);
+  const userRef = useRef(user);
 
   useEffect(() => {
     soundRef.current = soundEnabled;
     hapticsRef.current = hapticsEnabled;
   }, [soundEnabled, hapticsEnabled]);
 
-  // Theme State
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        GUEST_STORAGE_KEY,
+        JSON.stringify({
+          hasEnteredGame,
+          user,
+          knownWordIds,
+          wrongWordIds
+        })
+      );
+    } catch {
+      // Ignore storage errors
+    }
+  }, [hasEnteredGame, user, knownWordIds, wrongWordIds]);
+
   const [theme, setTheme] = useState(() => localStorage.getItem('wg_theme') || 'dark');
   const [devBarOpen, setDevBarOpen] = useState(true);
 
-  // Theme Sync Effect
   useEffect(() => {
     const root = window.document.documentElement;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -97,36 +178,92 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', listener);
   }, [theme]);
 
-  // Socket.io Real-Time Room, Gameplay, Audio & Reactions Listeners
+  const isInActiveRoom =
+    Boolean(room?.roomCode) && ['waiting', 'playing', 'reveal', 'rating'].includes(currentPhase);
+
   useEffect(() => {
-    socket.on('room_created', (newRoom) => {
-      setRoom(newRoom);
-      setRoomSettings({ ...newRoom.settings, roomCode: newRoom.roomCode });
-      setIsAdmin(true);
+    if (!isInActiveRoom) return;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isInActiveRoom]);
+
+  const applyRoomState = (roomData, isCreation = false) => {
+    sessionStorage.setItem(ACTIVE_ROOM_KEY, roomData.roomCode);
+    saveLastActiveRoom(roomData);
+    setLastActiveRoom({
+      roomCode: roomData.roomCode,
+      phase: roomData.phase || 'playing',
+      updatedAt: Date.now()
+    });
+
+    setRoom(roomData);
+    setRoomSettings({ ...roomData.settings, roomCode: roomData.roomCode });
+    setCurrentPhase(roomData.phase);
+    setAnsweringPlayer(roomData.answeringPlayer || null);
+
+    if (typeof roomData.timeLeft === 'number') setTimeLeft(roomData.timeLeft);
+    if (roomData.subPhase) setSubPhase(roomData.subPhase);
+    if (typeof roomData.totalExtended === 'number') setTotalExtended(roomData.totalExtended);
+
+    const me = roomData.players?.find((p) => p.guestId === guestId);
+    const amHost =
+      isCreation ||
+      roomData.hostId === socket.id ||
+      (me && roomData.originalHostGuestId && me.guestId === roomData.originalHostGuestId);
+    setIsAdmin(Boolean(amHost));
+
+    const currentClueGiverGuestId = roomData.clueGiverGuestId || roomData.clueGiver?.guestId;
+    if (roomData.clueGiver || currentClueGiverGuestId) {
+      const giverObj =
+        roomData.players?.find((p) => p.guestId === currentClueGiverGuestId) || roomData.clueGiver;
+      if (giverObj) setActiveClueGiver(giverObj);
+      setRole(currentClueGiverGuestId === guestId ? 'cluegiver' : 'guesser');
+    } else if (isCreation) {
       setRole('cluegiver');
-      setAnsweringPlayer(null);
+    }
+
+    if (isCreation) {
       setConfirmLeaveOpen(false);
-      setRoomError('');
-      setCurrentPhase('waiting');
+    }
+    setRoomError('');
+  };
+
+  useEffect(() => {
+    const tryAutoRejoin = () => {
+      const savedRoomCode = sessionStorage.getItem(ACTIVE_ROOM_KEY);
+      if (savedRoomCode) {
+        socket.emit('rejoin_room', {
+          roomCode: savedRoomCode,
+          guestId,
+          player: { name: userRef.current.name, avatar: userRef.current.avatar }
+        });
+      }
+    };
+
+    if (socket.connected) {
+      tryAutoRejoin();
+    }
+
+    socket.on('connect', tryAutoRejoin);
+
+    socket.on('rejoin_failed', () => {
+      sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+      clearLastActiveRoom();
+      setLastActiveRoom(null);
+      setRoom(null);
+      setAnsweringPlayer(null);
+    });
+
+    socket.on('room_created', (newRoom) => {
+      applyRoomState(newRoom, true);
     });
 
     socket.on('room_updated', (updatedRoom) => {
-      setRoom(updatedRoom);
-      setRoomSettings({ ...updatedRoom.settings, roomCode: updatedRoom.roomCode });
-      setIsAdmin(updatedRoom.hostId === socket.id);
-      setCurrentPhase(updatedRoom.phase);
-      setAnsweringPlayer(updatedRoom.answeringPlayer || null);
-
-      if (typeof updatedRoom.timeLeft === 'number') setTimeLeft(updatedRoom.timeLeft);
-      if (updatedRoom.subPhase) setSubPhase(updatedRoom.subPhase);
-      if (typeof updatedRoom.totalExtended === 'number') setTotalExtended(updatedRoom.totalExtended);
-
-      if (updatedRoom.clueGiver) {
-        setActiveClueGiver(updatedRoom.clueGiver);
-        setRole(updatedRoom.clueGiver.id === socket.id ? 'cluegiver' : 'guesser');
-      }
-
-      setRoomError('');
+      applyRoomState(updatedRoom, false);
     });
 
     socket.on('timer_tick', ({ timeLeft: serverTime, subPhase: serverSubPhase, totalExtended: serverExt }) => {
@@ -158,31 +295,36 @@ export default function App() {
       }, 2200);
     });
 
-socket.on('room_error', ({ message }) => {
-  setRoomError(message);
-});
+    socket.on('room_error', ({ message }) => {
+      setRoomError(message);
+      if (message?.toLowerCase().includes('not found')) {
+        clearLastActiveRoom();
+        setLastActiveRoom(null);
+      }
+    });
 
-socket.on('wrong_answer', ({ wordId }) => {
-  if (!wordId) return;
-  setWrongWordIds((prev) => (prev.includes(wordId) ? prev : [...prev, wordId]));
-});
+    socket.on('wrong_answer', ({ wordId }) => {
+      if (!wordId) return;
+      setWrongWordIds((prev) => (prev.includes(wordId) ? prev : [...prev, wordId]));
+    });
 
-return () => {
-  socket.off('room_created');
-  socket.off('room_updated');
-  socket.off('timer_tick');
-  socket.off('game_sfx');
-  socket.off('receive_reaction');
-  socket.off('room_error');
-  socket.off('wrong_answer');
-};
-  }, []);
+    return () => {
+      socket.off('connect', tryAutoRejoin);
+      socket.off('rejoin_failed');
+      socket.off('room_created');
+      socket.off('room_updated');
+      socket.off('timer_tick');
+      socket.off('game_sfx');
+      socket.off('receive_reaction');
+      socket.off('room_error');
+      socket.off('wrong_answer');
+    };
+  }, [guestId]);
 
-  // Socket.io Room Actions
   const handleCreateRoom = () => {
     setRoomError('');
     socket.emit('create_room', {
-      player: { name: user.name, avatar: user.avatar },
+      player: { guestId, name: user.name, avatar: user.avatar },
       settings: {
         gameMode: roomSettings.gameMode,
         tierFilter: roomSettings.tierFilter,
@@ -198,12 +340,35 @@ return () => {
       setRoomError('Please enter a room code.');
       return;
     }
+    const cleanCode = code.trim().toUpperCase();
     setRoomError('');
-    setRole('guesser');
+    sessionStorage.setItem(ACTIVE_ROOM_KEY, cleanCode);
+    socket.emit('join_room', {
+      roomCode: cleanCode,
+      player: { guestId, name: user.name, avatar: user.avatar }
+    });
+  };
+
+  const handleRejoinLastRoom = (codeToJoin) => {
+    const code = (codeToJoin || lastActiveRoom?.roomCode)?.trim().toUpperCase();
+    if (!code) return;
+    setRoomError('');
+    sessionStorage.setItem(ACTIVE_ROOM_KEY, code);
     socket.emit('join_room', {
       roomCode: code,
-      player: { name: user.name, avatar: user.avatar }
+      player: { guestId, name: user.name, avatar: user.avatar }
     });
+  };
+
+  const handleCopyRoomCode = async (code) => {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 1800);
+    } catch {
+      setCopiedCode(false);
+    }
   };
 
   const requestLeaveRoom = () => {
@@ -211,8 +376,11 @@ return () => {
   };
 
   const confirmLeaveRoom = () => {
+    sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+    clearLastActiveRoom();
+    setLastActiveRoom(null);
     if (room?.roomCode) {
-      socket.emit('leave_room', { roomCode: room.roomCode });
+      socket.emit('leave_room', { roomCode: room.roomCode, guestId });
     }
     setRoom(null);
     setAnsweringPlayer(null);
@@ -253,29 +421,52 @@ return () => {
   };
 
   const activeCard = room?.currentCard || vocabulary[cardIndex % vocabulary.length];
-  const myLivePlayer = room?.players?.find((p) => p.id === socket.id);
-  const hasSubmittedRating = Boolean(room?.roundRatings && room.roundRatings[socket.id]);
-  const isInActiveRoom = Boolean(room?.roomCode) && ['waiting', 'playing', 'reveal', 'rating'].includes(currentPhase);
+  const myLivePlayer = room?.players?.find((p) => p.guestId === guestId);
+  const hasSubmittedRating = Boolean(
+    room?.roundRatings && (room.roundRatings[guestId] || room.roundRatings[socket.id])
+  );
 
-const navigateToSubPage = (targetPhase) => {
-  if (targetPhase === 'profile' && !hasEnteredGame) return;
-  if (!['profile', 'settings', 'policy'].includes(currentPhase)) {
-    setPreviousPhase(currentPhase);
-  }
-  setCurrentPhase(targetPhase);
-};
+  // Only show players currently disconnected; disappears immediately when they reconnect
+  const awayPlayers = (room?.players || []).filter((p) => p.connected === false);
 
-const handleRecordWrongWord = (wordId) => {
-  if (!wordId) return;
-  setWrongWordIds((prev) => (prev.includes(wordId) ? prev : [...prev, wordId]));
-};
+  const connectedGuessersCount = Math.max(
+    1,
+    (room?.players || []).filter(
+      (p) => p.connected !== false && p.guestId !== (room?.clueGiverGuestId || room?.clueGiver?.guestId)
+    ).length
+  );
 
-const handleMarkKnown = (wordId) => {
-  if (!knownWordIds.includes(wordId)) {
-    setKnownWordIds([...knownWordIds, wordId]);
-  }
-  setWrongWordIds((prev) => prev.filter((id) => id !== wordId));
-};
+  const playersList = room?.players || [];
+  const topPlayer = playersList.length
+    ? [...playersList].sort((a, b) => (b.score || 0) - (a.score || 0))[0]
+    : null;
+  const myScore = myLivePlayer ? myLivePlayer.score || 0 : 0;
+  const myCorrectCards = myLivePlayer ? myLivePlayer.correctCount || 0 : 0;
+  const totalCycles = room?.settings?.totalRounds || roomSettings.totalRounds || 2;
+  const currentCycle =
+    typeof room?.cardIndex === 'number' && playersList.length > 0
+      ? Math.min(totalCycles, Math.floor(room.cardIndex / playersList.length) + 1)
+      : 1;
+
+  const navigateToSubPage = (targetPhase) => {
+    if (targetPhase === 'profile' && !hasEnteredGame) return;
+    if (!['profile', 'settings', 'policy'].includes(currentPhase)) {
+      setPreviousPhase(currentPhase);
+    }
+    setCurrentPhase(targetPhase);
+  };
+
+  const handleRecordWrongWord = (wordId) => {
+    if (!wordId) return;
+    setWrongWordIds((prev) => (prev.includes(wordId) ? prev : [...prev, wordId]));
+  };
+
+  const handleMarkKnown = (wordId) => {
+    if (!knownWordIds.includes(wordId)) {
+      setKnownWordIds([...knownWordIds, wordId]);
+    }
+    setWrongWordIds((prev) => prev.filter((id) => id !== wordId));
+  };
 
   const pageVariants = {
     initial: { opacity: 0, y: 16, scale: 0.98 },
@@ -291,7 +482,6 @@ const handleMarkKnown = (wordId) => {
 
   return (
     <div className="min-h-screen transition-colors duration-300 bg-slate-100 text-slate-900 dark:bg-[#0f141e] dark:text-slate-100 font-sans selection:bg-cyan-500/30 pb-28 overflow-x-hidden relative">
-      {/* Leave Room / Round Confirmation Modal */}
       <AnimatePresence>
         {confirmLeaveOpen && (
           <motion.div
@@ -310,12 +500,12 @@ const handleMarkKnown = (wordId) => {
                 🚪
               </div>
               <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                تأكيد الخروج من {currentPhase === 'waiting' ? 'الغرفة' : 'الجولة'}؟
+                Leave {currentPhase === 'waiting' ? 'Room' : 'Match'}?
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                 {role === 'cluegiver' && currentPhase === 'playing'
-                  ? 'أنت الموحي الحالي؛ إذا خرجت فسيتم إلغاء دورك فوراً ونقل الدور إلى اللاعب التالي حتى لا ينتظر الآخرون.'
-                  : 'سيتم إخراجك من الجلسة الحالية وإرجاعك إلى اللوبي.'}
+                  ? 'You are the active Clue-Giver. Leaving now will pass the turn to the next player immediately.'
+                  : 'You will leave the current session and return to the lobby.'}
               </p>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
@@ -324,14 +514,14 @@ const handleMarkKnown = (wordId) => {
                   onClick={() => setConfirmLeaveOpen(false)}
                   className="py-3 rounded-xl font-bold text-xs uppercase tracking-wider bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-slate-400 transition-all cursor-pointer"
                 >
-                  البقاء
+                  Stay
                 </button>
                 <button
                   type="button"
                   onClick={confirmLeaveRoom}
                   className="py-3 rounded-xl font-black text-xs uppercase tracking-wider bg-red-600 hover:bg-red-500 text-white shadow-lg transition-all cursor-pointer"
                 >
-                  تأكيد الخروج
+                  Confirm Exit
                 </button>
               </div>
             </motion.div>
@@ -339,7 +529,6 @@ const handleMarkKnown = (wordId) => {
         )}
       </AnimatePresence>
 
-      {/* Live Floating Emoji Overlay with Sway, Scale & Glow */}
       <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
         <AnimatePresence>
           {floatingEmojis.map((item) => (
@@ -365,79 +554,165 @@ const handleMarkKnown = (wordId) => {
       </div>
 
       <div className="flex flex-col items-center w-full max-w-lg mx-auto px-4 pt-5">
-        {/* Persistent Top Navigation Bar */}
-        <header className="w-full flex justify-between items-center bg-white dark:bg-[#1a202c] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-lg mb-6">
-          <div
-            onClick={() => {
-              if (isInActiveRoom) {
-                requestLeaveRoom();
-              } else {
-                setCurrentPhase('lobby');
-              }
-            }}
-            className="flex items-center gap-2.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white font-black text-base shadow-[0_0_12px_rgba(6,182,212,0.4)] group-hover:scale-105 transition-transform">
-              W
-            </div>
-            <div>
-              <span className="font-black tracking-wider text-sm block leading-none text-slate-800 dark:text-white">
-                WORD GLIMPSE
-              </span>
-              <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 tracking-widest uppercase">
-                لمحة • {user.name} {myLivePlayer ? `• ${myLivePlayer.score} pts` : ''}
-              </span>
-            </div>
-          </div>
+        <header className="w-full bg-white dark:bg-[#1a202c] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-lg mb-5 space-y-2.5">
+          <div className="flex justify-between items-center gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                onClick={() => {
+                  if (isInActiveRoom) {
+                    requestLeaveRoom();
+                  } else if (hasEnteredGame) {
+                    setCurrentPhase('lobby');
+                  }
+                }}
+                className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white font-black text-base shadow-[0_0_12px_rgba(6,182,212,0.4)] hover:scale-105 transition-transform cursor-pointer"
+              >
+                W
+              </div>
 
-          <div className="flex items-center gap-2">
-            {isInActiveRoom && (
+              <div className="min-w-0">
+                <span
+                  onClick={() => {
+                    if (isInActiveRoom) {
+                      requestLeaveRoom();
+                    } else if (hasEnteredGame) {
+                      setCurrentPhase('lobby');
+                    }
+                  }}
+                  className="font-black tracking-wider text-sm block leading-tight text-slate-800 dark:text-white cursor-pointer truncate"
+                >
+                  WORD GLIMPSE
+                </span>
+
+                {isInActiveRoom && room?.roomCode && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyRoomCode(room.roomCode)}
+                    title="Click to copy room code"
+                    className="mt-0.5 inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                  >
+                    <span>#{room.roomCode}</span>
+                    <span className="text-[9px] font-sans uppercase tracking-wider">
+                      {copiedCode ? 'Copied' : 'Copy'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isInActiveRoom && (
+                <button
+                  type="button"
+                  onClick={requestLeaveRoom}
+                  className="text-[10px] px-2.5 py-2 rounded-xl font-black uppercase tracking-wider bg-red-500/15 text-red-500 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-all cursor-pointer"
+                >
+                  Exit
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={requestLeaveRoom}
-                className="text-[10px] px-2.5 py-2 rounded-xl font-black uppercase tracking-wider bg-red-500/15 text-red-500 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-all cursor-pointer"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title="Toggle Light/Dark Mode"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-cyan-400 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 transition-all text-xs font-bold cursor-pointer"
               >
-                🚪 Exit
+                {theme === 'dark' ? '🌙' : '☀️'}
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              title="Toggle Light/Dark Mode"
-              className="p-2 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-cyan-400 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 transition-all text-xs font-bold"
-            >
-              {theme === 'dark' ? '🌙' : '☀️'}
-            </button>
+              {hasEnteredGame && (
+                <button
+                  type="button"
+                  onClick={() => navigateToSubPage('profile')}
+                  className={`text-[11px] px-3 py-2 rounded-xl font-bold border transition-all flex items-center gap-1.5 max-w-[130px] cursor-pointer ${
+                    currentPhase === 'profile'
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
+                      : 'bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-cyan-400 border-slate-200 dark:border-cyan-900/50 hover:bg-cyan-500/10'
+                  }`}
+                >
+                  <span>{user.avatar}</span>
+                  <span className="truncate">{user.name || 'Profile'}</span>
+                </button>
+              )}
 
-            {hasEnteredGame && (
-  <button
-    onClick={() => navigateToSubPage('profile')}
-    className={`text-[10px] px-3 py-2 rounded-xl font-bold uppercase tracking-wider border transition-all ${
-      currentPhase === 'profile'
-        ? 'bg-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
-        : 'bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-cyan-400 border-slate-200 dark:border-cyan-900/50 hover:bg-cyan-500/10'
-    }`}
-  >
-    {user.avatar} Profile
-  </button>
-)}
-
-            <button
-              type="button"
-              onClick={() => navigateToSubPage('settings')}
-              className={`text-[10px] px-3 py-2 rounded-xl font-bold uppercase tracking-wider border transition-all ${
-                currentPhase === 'settings'
-                  ? 'bg-blue-600 text-white border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.4)]'
-                  : 'bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800'
-              }`}
-            >
-              ⚙️
-            </button>
+              <button
+                type="button"
+                onClick={() => navigateToSubPage('settings')}
+                className={`text-xs px-2.5 py-2 rounded-xl font-bold border transition-all cursor-pointer ${
+                  currentPhase === 'settings'
+                    ? 'bg-blue-600 text-white border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.4)]'
+                    : 'bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800'
+                }`}
+              >
+                ⚙️
+              </button>
+            </div>
           </div>
+
+          {isInActiveRoom && (
+            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/60 grid grid-cols-4 gap-2 text-center">
+              <div className="bg-slate-50 dark:bg-[#0f141e] px-2 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Score</span>
+                <span className="text-xs font-mono font-black text-cyan-600 dark:text-cyan-400">
+                  {myScore}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-[#0f141e] px-2 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-800 truncate">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">1st</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-white truncate block">
+                  {topPlayer ? `${topPlayer.avatar} ${topPlayer.name}` : '-'}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-[#0f141e] px-2 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Solved</span>
+                <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
+                  {myCorrectCards}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-[#0f141e] px-2 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Cycle</span>
+                <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-400">
+                  {currentCycle}/{totalCycles}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isInActiveRoom && awayPlayers.length > 0 && (
+            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+              {awayPlayers.map((p) => (
+                <div
+                  key={p.guestId || p.id}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#0f141e] border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 opacity-45"
+                >
+                  <span>{p.avatar}</span>
+                  <span>{p.name}</span>
+                  <span className="text-[10px] font-medium">• away</span>
+                </div>
+              ))}
+            </div>
+          )}
         </header>
 
-        {/* Animated Main View Router */}
+        {isInActiveRoom && (room?.isPausedWaiting || room?.clueGiverGrace) && (
+          <div className="w-full space-y-2 mb-4">
+            {room?.isPausedWaiting && (
+              <div className="w-full p-3 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-300 text-xs font-bold text-center">
+                Match paused — waiting for another player to connect...
+              </div>
+            )}
+
+            {!room?.isPausedWaiting && room?.clueGiverGrace && (
+              <div className="w-full p-3 rounded-2xl bg-orange-500/15 border border-orange-500/40 text-orange-600 dark:text-orange-300 text-xs font-bold text-center">
+                Clue-Giver ({room.clueGiverGrace.avatar} {room.clueGiverGrace.name}) disconnected — waiting {room.clueGiverGrace.secondsLeft}s...
+              </div>
+            )}
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
           <motion.main
             key={`${currentPhase}-${role}`}
@@ -452,21 +727,42 @@ const handleMarkKnown = (wordId) => {
               <Auth
                 user={user}
                 setUser={setUser}
-              onLogin={() => {
-  setHasEnteredGame(true);
-  setCurrentPhase('lobby');
-}}
+                onLogin={() => {
+                  setHasEnteredGame(true);
+                  setCurrentPhase('lobby');
+                }}
                 onPolicy={() => navigateToSubPage('policy')}
               />
             )}
 
             {currentPhase === 'lobby' && (
               <>
-                {roomError && (
-                  <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-bold text-center">
-                    ⚠️ {roomError}
+                {lastActiveRoom?.roomCode && !room?.roomCode && (
+                  <div className="mb-4 p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-between gap-3 shadow-sm">
+                    <div className="text-left">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                        Last Active Room
+                      </p>
+                      <p className="text-xs font-bold text-slate-800 dark:text-white mt-0.5">
+                        Code: <span className="font-mono tracking-widest">{lastActiveRoom.roomCode}</span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRejoinLastRoom(lastActiveRoom.roomCode)}
+                      className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all cursor-pointer shrink-0"
+                    >
+                      Quick Rejoin
+                    </button>
                   </div>
                 )}
+
+                {roomError && (
+                  <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-bold text-center">
+                    {roomError}
+                  </div>
+                )}
+
                 <Lobby
                   roomSettings={roomSettings}
                   setRoomSettings={setRoomSettings}
@@ -514,15 +810,15 @@ const handleMarkKnown = (wordId) => {
                       result: 'correct'
                     });
                   }}
-                onJudgeIncorrect={() => {
-  if (!room?.roomCode && activeCard?.id) {
-    handleRecordWrongWord(activeCard.id);
-  }
-  socket.emit('judge_answer', {
-    roomCode: room?.roomCode,
-    result: 'incorrect'
-  });
-}}
+                  onJudgeIncorrect={() => {
+                    if (!room?.roomCode && activeCard?.id) {
+                      handleRecordWrongWord(activeCard.id);
+                    }
+                    socket.emit('judge_answer', {
+                      roomCode: room?.roomCode,
+                      result: 'incorrect'
+                    });
+                  }}
                   onSkipCard={() => {
                     socket.emit('judge_answer', {
                       roomCode: room?.roomCode,
@@ -568,7 +864,7 @@ const handleMarkKnown = (wordId) => {
                 timeLeft={timeLeft}
                 hasSubmitted={hasSubmittedRating}
                 submittedCount={Object.keys(room?.roundRatings || {}).length}
-                totalGuessers={Math.max(1, (room?.players?.length || 2) - 1)}
+                totalGuessers={connectedGuessersCount}
                 onSubmitRating={(score, feedback) => {
                   socket.emit('submit_rating', {
                     roomCode: room?.roomCode,
@@ -597,21 +893,27 @@ const handleMarkKnown = (wordId) => {
                   }
                 }}
                 onExitToLobby={() => {
+                  sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+                  clearLastActiveRoom();
+                  setLastActiveRoom(null);
+                  if (room?.roomCode) {
+                    socket.emit('leave_room', { roomCode: room.roomCode, guestId });
+                  }
                   setRoom(null);
                   setCurrentPhase('lobby');
                 }}
               />
             )}
 
-          {currentPhase === 'profile' && hasEnteredGame && (
-  <Profile
-    user={user}
-    vocabulary={vocabulary}
-    knownWordIds={knownWordIds}
-    wrongWordIds={wrongWordIds}
-    onBack={() => setCurrentPhase(previousPhase)}
-  />
-)}
+            {currentPhase === 'profile' && hasEnteredGame && (
+              <Profile
+                user={user}
+                vocabulary={vocabulary}
+                knownWordIds={knownWordIds}
+                wrongWordIds={wrongWordIds}
+                onBack={() => setCurrentPhase(previousPhase)}
+              />
+            )}
 
             {currentPhase === 'settings' && (
               <Settings
@@ -622,9 +924,16 @@ const handleMarkKnown = (wordId) => {
                 hapticsEnabled={hapticsEnabled}
                 setHapticsEnabled={setHapticsEnabled}
                 onLogout={() => {
-  setHasEnteredGame(false);
-  setCurrentPhase('auth');
-}}
+                  sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+                  clearLastActiveRoom();
+                  setLastActiveRoom(null);
+                  if (room?.roomCode) {
+                    socket.emit('leave_room', { roomCode: room.roomCode, guestId });
+                  }
+                  setRoom(null);
+                  setHasEnteredGame(false);
+                  setCurrentPhase('auth');
+                }}
                 onPolicy={() => navigateToSubPage('policy')}
                 onBack={() => setCurrentPhase(previousPhase)}
               />
@@ -637,7 +946,6 @@ const handleMarkKnown = (wordId) => {
         </AnimatePresence>
       </div>
 
-      {/* Collapsible Developer Debug Bar (Dev Only) */}
       {import.meta.env.DEV && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 dark:bg-[#0a0d14]/95 backdrop-blur-md border-t border-slate-700/80 text-white px-4 py-2 shadow-2xl">
           <div className="max-w-3xl mx-auto">
