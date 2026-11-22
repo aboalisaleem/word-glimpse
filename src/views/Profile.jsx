@@ -1,5 +1,5 @@
-export default function Profile({ user, vocabulary, knownWordIds, onBack }) {
-  const savedMissedWords = vocabulary.filter((w) => !knownWordIds.includes(w.id));
+export default function Profile({ user, vocabulary, knownWordIds, wrongWordIds = [], onBack }) {
+  const wrongWords = vocabulary.filter((w) => wrongWordIds.includes(w.id));
 
   return (
     <div className="w-full space-y-5 animate-fade-in-up">
@@ -50,29 +50,38 @@ export default function Profile({ user, vocabulary, knownWordIds, onBack }) {
         </div>
       </div>
 
-      {/* Saved Vocabulary Bank */}
+      {/* Wrong Words From Games */}
       <div className="bg-white dark:bg-[#1a202c] rounded-3xl p-6 border border-slate-200 dark:border-slate-700/50 shadow-2xl">
         <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest mb-3">
-          📌 Saved Words to Review ({savedMissedWords.length})
+          📌 Words You Missed in Games ({wrongWords.length})
         </h3>
-        <div className="space-y-2.5">
-          {savedMissedWords.map((word) => (
-            <div
-              key={word.id}
-              className="flex justify-between items-center bg-slate-50 dark:bg-[#0f141e] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700"
-            >
-              <div>
-                <p className="font-bold text-slate-800 dark:text-white text-sm">
-                  {word.word}
-                </p>
-                <p className="text-[11px] text-slate-400">{word.meaning}</p>
+
+        {wrongWords.length === 0 ? (
+          <div className="bg-slate-50 dark:bg-[#0f141e] p-5 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              No wrong answers recorded yet. Words you answer wrong during a match will appear here!
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {wrongWords.map((word) => (
+              <div
+                key={word.id}
+                className="flex justify-between items-center bg-slate-50 dark:bg-[#0f141e] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700"
+              >
+                <div>
+                  <p className="font-bold text-slate-800 dark:text-white text-sm">
+                    {word.word}
+                  </p>
+                  <p className="text-[11px] text-slate-400">{word.meaning}</p>
+                </div>
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/30">
+                  Tier {word.difficulty}
+                </span>
               </div>
-              <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/30">
-                Tier {word.difficulty}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

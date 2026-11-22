@@ -22,9 +22,7 @@ export default function Auth({ user, setUser, onLogin, onPolicy }) {
     <div className="w-full space-y-6 animate-fade-in-up">
       {/* Brand Hero */}
       <div className="text-center py-2">
-        <div className="inline-block px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-500 dark:text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-2">
-          Zero-Install Party Vocabulary Game
-        </div>
+        
         <h1 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight drop-shadow-sm">
           Word Glimpse
         </h1>
@@ -111,27 +109,26 @@ export default function Auth({ user, setUser, onLogin, onPolicy }) {
               </div>
             </div>
 
-            {/* Nickname Input */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 block">
-                Player Nickname
-              </label>
-              <input
-                type="text"
-                required
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="Enter your player tag..."
-                className="w-full bg-slate-50 dark:bg-[#0f141e] text-slate-900 dark:text-white px-4 py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 focus:border-cyan-400 outline-none font-bold text-sm transition-all"
-              />
-            </div>
-
+          {/* Nickname Input */}
+<div>
+  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 block">
+    Player Nickname
+  </label>
+  <input
+    type="text"
+    required
+    value={nickname}
+    onChange={(e) => setNickname(e.target.value)}
+    placeholder="write your name"
+    className="w-full bg-slate-50 dark:bg-[#0f141e] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 focus:border-cyan-400 outline-none font-bold text-sm transition-all"
+  />
+</div>
             {/* Primary Action Button */}
             <button
               type="submit"
               className="w-full font-black py-4 rounded-xl text-sm tracking-widest uppercase transition-all active:scale-95 bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
             >
-              🚀 Play Instantly as Guest
+              🚀 Play as Guest
             </button>
           </form>
         ) : (

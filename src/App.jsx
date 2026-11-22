@@ -18,7 +18,8 @@ import { playSound, playEmojiSound } from './utils/feedback';
 export default function App() {
   const [currentPhase, setCurrentPhase] = useState('auth');
   const [previousPhase, setPreviousPhase] = useState('auth');
-
+  const [hasEnteredGame, setHasEnteredGame] = useState(false);
+  const [wrongWordIds, setWrongWordIds] = useState([]);
   // Player & Role States
   const [user, setUser] = useState({
     name: '\"write your name\"',
@@ -157,18 +158,24 @@ export default function App() {
       }, 2200);
     });
 
-    socket.on('room_error', ({ message }) => {
-      setRoomError(message);
-    });
+socket.on('room_error', ({ message }) => {
+  setRoomError(message);
+});
 
-    return () => {
-      socket.off('room_created');
-      socket.off('room_updated');
-      socket.off('timer_tick');
-      socket.off('game_sfx');
-      socket.off('receive_reaction');
-      socket.off('room_error');
-    };
+socket.on('wrong_answer', ({ wordId }) => {
+  if (!wordId) return;
+  setWrongWordIds((prev) => (prev.includes(wordId) ? prev : [...prev, wordId]));
+});
+
+return () => {
+  socket.off('room_created');
+  socket.off('room_updated');
+  socket.off('timer_tick');
+  socket.off('game_sfx');
+  socket.off('receive_reaction');
+  socket.off('room_error');
+  socket.off('wrong_answer');
+};
   }, []);
 
   // Socket.io Room Actions
@@ -250,18 +257,25 @@ export default function App() {
   const hasSubmittedRating = Boolean(room?.roundRatings && room.roundRatings[socket.id]);
   const isInActiveRoom = Boolean(room?.roomCode) && ['waiting', 'playing', 'reveal', 'rating'].includes(currentPhase);
 
-  const navigateToSubPage = (targetPhase) => {
-    if (!['profile', 'settings', 'policy'].includes(currentPhase)) {
-      setPreviousPhase(currentPhase);
-    }
-    setCurrentPhase(targetPhase);
-  };
+const navigateToSubPage = (targetPhase) => {
+  if (targetPhase === 'profile' && !hasEnteredGame) return;
+  if (!['profile', 'settings', 'policy'].includes(currentPhase)) {
+    setPreviousPhase(currentPhase);
+  }
+  setCurrentPhase(targetPhase);
+};
 
-  const handleMarkKnown = (wordId) => {
-    if (!knownWordIds.includes(wordId)) {
-      setKnownWordIds([...knownWordIds, wordId]);
-    }
-  };
+const handleRecordWrongWord = (wordId) => {
+  if (!wordId) return;
+  setWrongWordIds((prev) => (prev.includes(wordId) ? prev : [...prev, wordId]));
+};
+
+const handleMarkKnown = (wordId) => {
+  if (!knownWordIds.includes(wordId)) {
+    setKnownWordIds([...knownWordIds, wordId]);
+  }
+  setWrongWordIds((prev) => prev.filter((id) => id !== wordId));
+};
 
   const pageVariants = {
     initial: { opacity: 0, y: 16, scale: 0.98 },
@@ -396,17 +410,18 @@ export default function App() {
               {theme === 'dark' ? '🌙' : '☀️'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigateToSubPage('profile')}
-              className={`text-[10px] px-3 py-2 rounded-xl font-bold uppercase tracking-wider border transition-all ${
-                currentPhase === 'profile'
-                  ? 'bg-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
-                  : 'bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-cyan-400 border-slate-200 dark:border-cyan-900/50 hover:bg-cyan-500/10'
-              }`}
-            >
-              {user.avatar} Profile
-            </button>
+            {hasEnteredGame && (
+  <button
+    onClick={() => navigateToSubPage('profile')}
+    className={`text-[10px] px-3 py-2 rounded-xl font-bold uppercase tracking-wider border transition-all ${
+      currentPhase === 'profile'
+        ? 'bg-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
+        : 'bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-cyan-400 border-slate-200 dark:border-cyan-900/50 hover:bg-cyan-500/10'
+    }`}
+  >
+    {user.avatar} Profile
+  </button>
+)}
 
             <button
               type="button"
@@ -437,7 +452,10 @@ export default function App() {
               <Auth
                 user={user}
                 setUser={setUser}
-                onLogin={() => setCurrentPhase('lobby')}
+              onLogin={() => {
+  setHasEnteredGame(true);
+  setCurrentPhase('lobby');
+}}
                 onPolicy={() => navigateToSubPage('policy')}
               />
             )}
@@ -496,12 +514,15 @@ export default function App() {
                       result: 'correct'
                     });
                   }}
-                  onJudgeIncorrect={() => {
-                    socket.emit('judge_answer', {
-                      roomCode: room?.roomCode,
-                      result: 'incorrect'
-                    });
-                  }}
+                onJudgeIncorrect={() => {
+  if (!room?.roomCode && activeCard?.id) {
+    handleRecordWrongWord(activeCard.id);
+  }
+  socket.emit('judge_answer', {
+    roomCode: room?.roomCode,
+    result: 'incorrect'
+  });
+}}
                   onSkipCard={() => {
                     socket.emit('judge_answer', {
                       roomCode: room?.roomCode,
@@ -582,14 +603,15 @@ export default function App() {
               />
             )}
 
-            {currentPhase === 'profile' && (
-              <Profile
-                user={user}
-                vocabulary={vocabulary}
-                knownWordIds={knownWordIds}
-                onBack={() => setCurrentPhase(previousPhase)}
-              />
-            )}
+          {currentPhase === 'profile' && hasEnteredGame && (
+  <Profile
+    user={user}
+    vocabulary={vocabulary}
+    knownWordIds={knownWordIds}
+    wrongWordIds={wrongWordIds}
+    onBack={() => setCurrentPhase(previousPhase)}
+  />
+)}
 
             {currentPhase === 'settings' && (
               <Settings
@@ -599,7 +621,10 @@ export default function App() {
                 setSoundEnabled={setSoundEnabled}
                 hapticsEnabled={hapticsEnabled}
                 setHapticsEnabled={setHapticsEnabled}
-                onLogout={() => setCurrentPhase('auth')}
+                onLogout={() => {
+  setHasEnteredGame(false);
+  setCurrentPhase('auth');
+}}
                 onPolicy={() => navigateToSubPage('policy')}
                 onBack={() => setCurrentPhase(previousPhase)}
               />
