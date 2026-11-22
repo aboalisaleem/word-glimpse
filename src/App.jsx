@@ -21,13 +21,13 @@ const ACTIVE_ROOM_KEY = 'wg_active_room';
 const LAST_ACTIVE_ROOM_KEY = 'wg_last_active_room';
 
 function getOrCreateGuestId() {
-  let id = sessionStorage.getItem(GUEST_ID_KEY);
+  let id = localStorage.getItem(GUEST_ID_KEY);
   if (!id) {
     id =
       typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : `guest-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    sessionStorage.setItem(GUEST_ID_KEY, id);
+    localStorage.setItem(GUEST_ID_KEY, id);
   }
   return id;
 }

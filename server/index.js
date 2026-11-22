@@ -58,8 +58,6 @@ function getFilteredDeck(tierFilter) {
 function dedupeRoomPlayers(room) {
   if (!room || !Array.isArray(room.players)) return;
 
-  const targetClueGiverGuestId =
-    room.clueGiverGrace?.guestId || room.clueGiverGuestId || room.clueGiver?.guestId || null;
   const seenByGuestId = new Map();
 
   for (const player of room.players) {
@@ -82,16 +80,8 @@ function dedupeRoomPlayers(room) {
   }
 
   room.players = Array.from(seenByGuestId.values());
-
-  if (targetClueGiverGuestId) {
-    const idx = room.players.findIndex((p) => p.guestId === targetClueGiverGuestId);
-    if (idx !== -1) {
-      room.clueGiverIndex = idx;
-      room.clueGiver = { ...room.players[idx] };
-      room.clueGiverGuestId = room.players[idx].guestId;
-    }
-  }
 }
+
 
 function getConnectedPlayers(room) {
   return room.players.filter((p) => p.connected !== false);
@@ -150,7 +140,6 @@ function syncHostFlags(room) {
 }
 
 function syncClueGiverReference(room) {
-  dedupeRoomPlayers(room);
   if (!room.players.length) {
     room.clueGiver = null;
     room.clueGiverGuestId = null;
