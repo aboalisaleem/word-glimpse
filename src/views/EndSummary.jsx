@@ -12,10 +12,21 @@ export default function EndSummary({
 }) {
   // Sort live players by score (fallback to user if opened via dev debug bar)
   const leaderboard = players.length
-    ? [...players].sort((a, b) => b.score - a.score)
-    : [{ id: 'local', name: user.name, avatar: user.avatar, score: 12.5 }];
+    ? [...players].sort((a, b) => (b.score || 0) - (a.score || 0))
+    : [{ id: 'local', name: user.name, avatar: user.avatar, score: 24, avgRating: 9.2, ratingCount: 2 }];
 
   const winner = leaderboard[0];
+
+  // Determine Best Teacher based on highest peer avgRating (only players who received ratings)
+  const ratedPlayers = leaderboard.filter((p) => (p.ratingCount || 0) > 0 || (p.avgRating || 0) > 0);
+  const bestTeacher = ratedPlayers.length
+    ? [...ratedPlayers].sort((a, b) => {
+        if ((b.avgRating || 0) !== (a.avgRating || 0)) {
+          return (b.avgRating || 0) - (a.avgRating || 0);
+        }
+        return (b.ratingCount || 0) - (a.ratingCount || 0);
+      })[0]
+    : null;
 
   // Personalized missed vocabulary: exclude words guessed correctly, given as clues, or marked "I Know It"
   const missedWords = playedHistory.length
@@ -43,9 +54,37 @@ export default function EndSummary({
           {winner.name}
         </p>
         <p className="text-sm font-black text-orange-950/80 bg-white/30 inline-block px-4 py-1 rounded-full mt-2">
-          {winner.score} Total Points
+          {winner.score || 0} Total Points
         </p>
       </div>
+
+      {/* Best Teacher Award Card */}
+      {bestTeacher && (
+        <div className="w-full bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-indigo-500/15 dark:from-cyan-500/20 dark:via-blue-600/20 dark:to-indigo-600/20 rounded-3xl p-5 border border-cyan-500/40 shadow-xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-12 h-12 shrink-0 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-2xl">
+              {bestTeacher.avatar}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">
+                🎓 Best Teacher Award
+              </p>
+              <p className="text-base font-black text-slate-900 dark:text-white truncate">
+                {bestTeacher.name} {bestTeacher.id === myId ? '(You)' : ''}
+              </p>
+            </div>
+          </div>
+
+          <div className="shrink-0 text-right bg-white/70 dark:bg-[#0f141e]/80 px-3.5 py-2 rounded-2xl border border-cyan-500/30">
+            <span className="text-sm font-mono font-black text-amber-500 dark:text-amber-400 block leading-tight">
+              ⭐ {bestTeacher.avgRating}/10
+            </span>
+            <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Peer Rating
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Live Final Leaderboard */}
       <div className="w-full bg-white dark:bg-[#1a202c] rounded-3xl p-6 border border-slate-200 dark:border-slate-700/50 shadow-2xl">
@@ -53,29 +92,50 @@ export default function EndSummary({
           📊 Final Leaderboard
         </h3>
         <div className="space-y-2">
-          {leaderboard.map((p, idx) => (
-            <div
-              key={p.id || idx}
-              className={`flex items-center justify-between p-3.5 rounded-2xl border ${
-                p.id === myId
-                  ? 'bg-cyan-500/10 border-cyan-500/40'
-                  : 'bg-slate-50 dark:bg-[#0f141e] border-slate-200 dark:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-lg w-6 text-center font-black">
-                  {medals[idx] || `#${idx + 1}`}
-                </span>
-                <span className="text-xl">{p.avatar}</span>
-                <span className="font-bold text-sm text-slate-900 dark:text-white">
-                  {p.name} {p.id === myId ? '(You)' : ''}
-                </span>
+          {leaderboard.map((p, idx) => {
+            const isBestTeacher =
+              bestTeacher &&
+              (bestTeacher.guestId ? p.guestId === bestTeacher.guestId : p.id === bestTeacher.id);
+
+            return (
+              <div
+                key={p.guestId || p.id || idx}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border ${
+                  p.id === myId
+                    ? 'bg-cyan-500/10 border-cyan-500/40'
+                    : 'bg-slate-50 dark:bg-[#0f141e] border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-lg w-6 text-center font-black shrink-0">
+                    {medals[idx] || `#${idx + 1}`}
+                  </span>
+                  <span className="text-xl shrink-0">{p.avatar}</span>
+                  <div className="min-w-0">
+                    <span className="font-bold text-sm text-slate-900 dark:text-white block truncate">
+                      {p.name} {p.id === myId ? '(You)' : ''}
+                    </span>
+                    {isBestTeacher && (
+                      <span className="text-[10px] font-black text-cyan-600 dark:text-cyan-400">
+                        🎓 Best Teacher
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0 ml-2">
+                  <span className="font-mono font-black text-sm text-cyan-600 dark:text-cyan-400 block">
+                    {p.score || 0} pts
+                  </span>
+                  {p.avgRating > 0 && (
+                    <span className="text-[10px] font-mono font-bold text-amber-500 dark:text-amber-400 block">
+                      ⭐ {p.avgRating}/10
+                    </span>
+                  )}
+                </div>
               </div>
-              <span className="font-mono font-black text-sm text-cyan-600 dark:text-cyan-400">
-                {p.score} pts
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -132,7 +192,7 @@ export default function EndSummary({
             <button
               type="button"
               onClick={onCreateAccount}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] active:scale-95 text-xs tracking-widest uppercase transition-all"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] active:scale-95 text-xs tracking-widest uppercase transition-all cursor-pointer"
             >
               Create Free Account
             </button>
@@ -145,7 +205,7 @@ export default function EndSummary({
         <button
           type="button"
           onClick={onExitToLobby}
-          className="bg-white dark:bg-[#1a202c] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-black py-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs uppercase tracking-widest transition-all"
+          className="bg-white dark:bg-[#1a202c] hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-black py-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs uppercase tracking-widest transition-all cursor-pointer"
         >
           Exit to Lobby
         </button>
@@ -154,7 +214,7 @@ export default function EndSummary({
           <button
             type="button"
             onClick={onPlayAgain}
-            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 text-xs uppercase tracking-widest transition-all"
+            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-95 text-xs uppercase tracking-widest transition-all cursor-pointer"
           >
             🔄 Play Again
           </button>

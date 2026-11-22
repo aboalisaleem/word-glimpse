@@ -86,6 +86,9 @@ function dedupeRoomPlayers(room) {
         id: player.connected !== false ? player.id : existing.id,
         score: Math.max(existing.score || 0, player.score || 0),
         correctCount: Math.max(existing.correctCount || 0, player.correctCount || 0),
+        ratingSum: Math.max(existing.ratingSum || 0, player.ratingSum || 0),
+        ratingCount: Math.max(existing.ratingCount || 0, player.ratingCount || 0),
+        avgRating: Math.max(existing.avgRating || 0, player.avgRating || 0),
         connected: isAnyConnected,
         disconnectedAt: isAnyConnected ? null : player.disconnectedAt || existing.disconnectedAt
       });
@@ -179,18 +182,11 @@ function recordPlayedCard(room, winnerPlayer = null) {
   }
 }
 
-function calculateGuesserPoints(room) {
+function calculateCardPoints(room) {
   const difficulty = room.currentCard?.difficulty || 'C';
-  const basePoints = difficulty === 'A' ? 3 : difficulty === 'B' ? 2 : 1;
-
-  const totalGuessWindow = (room.settings.guessTime || 60) + (room.totalExtended || 0);
-  const totalMins = Math.max(1, Math.ceil(totalGuessWindow / 60));
-
-  const elapsedMins =
-    room.subPhase === 'guessing' ? Math.floor((room.guessElapsed || 0) / 60) : 0;
-
-  const speedMultiplier = Math.max(1, totalMins - elapsedMins);
-  return basePoints * speedMultiplier;
+  if (difficulty === 'A') return 12;
+  if (difficulty === 'B') return 8;
+  return 5;
 }
 
 function checkPauseForLowPlayers(room) {
@@ -243,7 +239,7 @@ function startNextRound(roomCode, keepCurrentCard = false) {
   room.clueGiverIndex = findNextConnectedIndex(room, room.clueGiverIndex % room.players.length);
   syncClueGiverReference(room);
   room.answeringPlayer = null;
-  room.triedPlayerIds = [];
+  room.wrongAttempts = {};
   room.roundRatings = {};
   room.phase = 'playing';
   room.subPhase = 'explanation';
@@ -273,7 +269,9 @@ function finalizeRatingsAndAdvance(roomCode) {
 
     const giver = room.players.find((p) => p.guestId === room.clueGiverGuestId);
     if (giver) {
-      giver.score = Number((giver.score + avg).toFixed(1));
+      giver.ratingSum = (giver.ratingSum || 0) + sum;
+      giver.ratingCount = (giver.ratingCount || 0) + ratingsList.length;
+      giver.avgRating = Number((giver.ratingSum / giver.ratingCount).toFixed(1));
     }
     room.lastRatingAvg = avg;
   } else {
@@ -625,6 +623,9 @@ io.on('connection', (socket) => {
           avatar: player.avatar,
           score: 0,
           correctCount: 0,
+          ratingSum: 0,
+          ratingCount: 0,
+          avgRating: 0,
           isHost: true,
           connected: true,
           disconnectedAt: null
@@ -637,7 +638,7 @@ io.on('connection', (socket) => {
       clueGiverGuestId: null,
       clueGiver: null,
       answeringPlayer: null,
-      triedPlayerIds: [],
+      wrongAttempts: {},
       roundRatings: {},
       lastRatingAvg: null,
       playedHistory: []
@@ -677,6 +678,9 @@ io.on('connection', (socket) => {
       avatar: player.avatar,
       score: 0,
       correctCount: 0,
+      ratingSum: 0,
+      ratingCount: 0,
+      avgRating: 0,
       isHost: false,
       connected: true,
       disconnectedAt: null
@@ -742,6 +746,9 @@ io.on('connection', (socket) => {
     room.players.forEach((p) => {
       p.score = 0;
       p.correctCount = 0;
+      p.ratingSum = 0;
+      p.ratingCount = 0;
+      p.avgRating = 0;
     });
     room.deck = getFilteredDeck(room.settings.tierFilter);
     room.cardIndex = 0;
@@ -749,7 +756,7 @@ io.on('connection', (socket) => {
     room.clueGiverIndex = findNextConnectedIndex(room, 0);
     syncClueGiverReference(room);
     room.answeringPlayer = null;
-    room.triedPlayerIds = [];
+    room.wrongAttempts = {};
     room.roundRatings = {};
     room.playedHistory = [];
     room.isPausedWaiting = false;
@@ -811,16 +818,24 @@ io.on('connection', (socket) => {
 
   socket.on('judge_answer', ({ roomCode, result }) => {
     const room = rooms[roomCode];
-    if (!room || room.clueGiverGuestId !== getGuestIdBySocket(room, socket.id)) return;
+    if (!room || room.phase !== 'playing' || room.clueGiverGuestId !== getGuestIdBySocket(room, socket.id)) return;
     if (room.isPausedWaiting) return;
 
     if (result === 'correct' && room.answeringPlayer) {
+      const earned = calculateCardPoints(room);
+
       const winner = room.players.find((p) => p.guestId === room.answeringPlayer.guestId);
       if (winner) {
-        const earned = calculateGuesserPoints(room);
-        winner.score = Number((winner.score + earned).toFixed(1));
+        // Deduct any prior wrong-attempt bonus on this same card so total gain equals earned
+        const priorAttempts = room.wrongAttempts?.[winner.guestId] || 0;
+        const priorBonus = priorAttempts === 1 ? 2 : priorAttempts >= 2 ? 1 : 0;
+
+        winner.score = Math.max(0, (winner.score || 0) - priorBonus) + earned;
         winner.correctCount = (winner.correctCount || 0) + 1;
       }
+
+      
+
       stopRoomTimer(roomCode);
       recordPlayedCard(room, winner || room.answeringPlayer);
       room.answeringPlayer = null;
@@ -832,11 +847,21 @@ io.on('connection', (socket) => {
           wordId: room.currentCard.id
         });
       }
+
       const guesser = room.players.find((p) => p.guestId === room.answeringPlayer.guestId);
-      if (guesser && !room.triedPlayerIds.includes(guesser.guestId)) {
-        guesser.score = Number((guesser.score + 0.5).toFixed(1));
-        room.triedPlayerIds.push(guesser.guestId);
+      if (guesser) {
+        if (!room.wrongAttempts) room.wrongAttempts = {};
+        const attempts = room.wrongAttempts[guesser.guestId] || 0;
+
+        if (attempts === 0) {
+          guesser.score = (guesser.score || 0) + 2;
+        } else if (attempts === 1) {
+          guesser.score = Math.max(0, (guesser.score || 0) - 1);
+        }
+
+        room.wrongAttempts[guesser.guestId] = attempts + 1;
       }
+
       room.answeringPlayer = null;
       io.to(roomCode).emit('game_sfx', { type: 'incorrect' });
     } else if (result === 'skip') {
@@ -915,11 +940,14 @@ io.on('connection', (socket) => {
     room.players.forEach((p) => {
       p.score = 0;
       p.correctCount = 0;
+      p.ratingSum = 0;
+      p.ratingCount = 0;
+      p.avgRating = 0;
     });
     room.cardIndex = 0;
     room.currentCard = null;
     room.answeringPlayer = null;
-    room.triedPlayerIds = [];
+    room.wrongAttempts = {};
     room.roundRatings = {};
     room.playedHistory = [];
     room.isPausedWaiting = false;

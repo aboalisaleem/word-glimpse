@@ -13,6 +13,7 @@ export default function WaitingRoom({
 }) {
   const [copied, setCopied] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
 
   const players = livePlayers?.length
     ? livePlayers
@@ -29,6 +30,71 @@ export default function WaitingRoom({
 
   return (
     <div className="w-full space-y-5 animate-fade-in-up">
+      {/* Quick Rules Modal */}
+      {showRulesModal && (
+        <div
+          onClick={() => setShowRulesModal(false)}
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-white dark:bg-[#1a202c] rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4"
+          >
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700/60 pb-3">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                🃏 How to Play Word Glimpse
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowRulesModal(false)}
+                className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-[#0f141e] text-slate-500 hover:text-white font-bold text-xs flex items-center justify-center cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              <div className="bg-slate-50 dark:bg-[#0f141e] p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <p className="font-black text-cyan-600 dark:text-cyan-400 uppercase text-[10px] mb-1">
+                  1. Explain & Buzz
+                </p>
+                <p>
+                  The <strong>Clue-Giver</strong> explains the target word without saying the word, its root, or any red <strong>Forbidden Words</strong>. Guessers buzz in as soon as they know it.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-[#0f141e] p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <p className="font-black text-cyan-600 dark:text-cyan-400 uppercase text-[10px] mb-1">
+                  2. Fixed Scoring
+                </p>
+                <p>
+                  <strong>Tier A:</strong> 12 pts • <strong>Tier B:</strong> 8 pts • <strong>Tier C:</strong> 5 pts.
+                  <br />
+                  Wrong guess bonus: <strong>+2 pts</strong> on 1st try, drops to <strong>+1 pt</strong> on 2nd try.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-[#0f141e] p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <p className="font-black text-cyan-600 dark:text-cyan-400 uppercase text-[10px] mb-1">
+                  3. Peer Rating (🎓 Best Teacher)
+                </p>
+                <p>
+                  Rate the Clue-Giver from <strong>1–10</strong> after each round. Ratings are tracked separately to crown the <strong>Best Teacher</strong>!
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRulesModal(false)}
+              className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
+            >
+              Got It!
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Room Code & Share Banner */}
       <div className="bg-white dark:bg-[#1a202c] rounded-3xl p-6 border border-slate-200 dark:border-slate-700/50 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 via-blue-500 to-orange-500"></div>
@@ -47,14 +113,14 @@ export default function WaitingRoom({
             <button
               type="button"
               onClick={handleCopyCode}
-              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs border border-slate-200 dark:border-slate-700 hover:border-cyan-400 transition-all"
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-cyan-600 dark:text-cyan-400 font-bold text-xs border border-slate-200 dark:border-slate-700 hover:border-cyan-400 transition-all cursor-pointer"
             >
               {copied ? '✅ Copied!' : '📋 Copy Link'}
             </button>
             <button
               type="button"
               onClick={() => setShowQrModal(!showQrModal)}
-              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 hover:border-blue-400 transition-all"
+              className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 hover:border-blue-400 transition-all cursor-pointer"
             >
               📱 QR
             </button>
@@ -136,18 +202,32 @@ export default function WaitingRoom({
               1. Select Game Mode
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setRoomSettings({ ...roomSettings, gameMode: 'glimpse' })}
-                className={`py-3 px-3 rounded-2xl text-[11px] font-black border text-left transition-all ${
-                  roomSettings.gameMode === 'glimpse'
-                    ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
-                    : 'bg-slate-50 dark:bg-[#0f141e] text-slate-500 border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <div className="text-sm mb-0.5">🃏 Word Glimpse</div>
-                <div className="text-[9px] font-medium opacity-80">Explain without taboo words</div>
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setRoomSettings({ ...roomSettings, gameMode: 'glimpse' })}
+                  className={`w-full py-3 pl-3 pr-9 rounded-2xl text-[11px] font-black border text-left transition-all cursor-pointer ${
+                    roomSettings.gameMode === 'glimpse'
+                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                      : 'bg-slate-50 dark:bg-[#0f141e] text-slate-500 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <div className="text-sm mb-0.5">🃏 Word Glimpse</div>
+                  <div className="text-[9px] font-medium opacity-80">Explain without taboo words</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowRulesModal(true);
+                  }}
+                  title="How to play Word Glimpse"
+                  className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-blue-500/20 hover:bg-blue-500/40 text-blue-500 dark:text-cyan-300 border border-blue-400/40 font-black text-xs flex items-center justify-center transition-all cursor-pointer"
+                >
+                  !
+                </button>
+              </div>
 
               <div className="relative">
                 <button
@@ -233,7 +313,7 @@ export default function WaitingRoom({
                   key={filter}
                   type="button"
                   onClick={() => setRoomSettings({ ...roomSettings, tierFilter: filter })}
-                  className={`py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${
+                  className={`py-2 rounded-lg text-[10px] font-black uppercase border transition-all cursor-pointer ${
                     roomSettings.tierFilter === filter
                       ? 'bg-orange-500/20 text-orange-500 dark:text-orange-400 border-orange-500/50'
                       : 'bg-slate-50 dark:bg-[#0f141e] text-slate-500 border-slate-200 dark:border-slate-700'
@@ -248,13 +328,22 @@ export default function WaitingRoom({
           <button
             type="button"
             onClick={onStartGame}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.5)] active:scale-95 text-sm tracking-widest uppercase transition-all mt-2"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.5)] active:scale-95 text-sm tracking-widest uppercase transition-all mt-2 cursor-pointer"
           >
             🚀 Start Match Now
           </button>
         </div>
       ) : (
-        <div className="bg-white dark:bg-[#1a202c] rounded-3xl p-8 border border-slate-200 dark:border-slate-700/50 shadow-2xl flex flex-col items-center justify-center text-center">
+        <div className="relative bg-white dark:bg-[#1a202c] rounded-3xl p-8 border border-slate-200 dark:border-slate-700/50 shadow-2xl flex flex-col items-center justify-center text-center">
+          <button
+            type="button"
+            onClick={() => setShowRulesModal(true)}
+            title="How to play Word Glimpse"
+            className="absolute top-4 right-4 w-7 h-7 rounded-full bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 font-black text-xs flex items-center justify-center transition-all cursor-pointer"
+          >
+            !
+          </button>
+
           <div className="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin mb-4"></div>
           <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">
             Waiting for Host to Start...
@@ -273,7 +362,7 @@ export default function WaitingRoom({
         <button
           type="button"
           onClick={onLeaveRoom}
-          className="text-xs font-bold text-slate-400 hover:text-red-400 uppercase tracking-widest transition-colors"
+          className="text-xs font-bold text-slate-400 hover:text-red-400 uppercase tracking-widest transition-colors cursor-pointer"
         >
           ← Leave Waiting Room
         </button>
