@@ -4,7 +4,7 @@ const AVATARS = ['🦁', '🐰', '🍄', '🦊', '🐼', '🐯', '🐸', '🐙']
 
 export default function Auth({ user, setUser, onLogin, onPolicy }) {
   const [authMode, setAuthMode] = useState('guest'); // 'guest' | 'login' | 'signup'
-  const [nickname, setNickname] = useState(user.name || '');
+  const [nickname, setNickname] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(user.avatar || '🦁');
 
   const handleGuestSubmit = (e) => {
@@ -115,13 +115,13 @@ export default function Auth({ user, setUser, onLogin, onPolicy }) {
     Player Nickname
   </label>
   <input
-    type="text"
-    required
-    value={nickname}
-    onChange={(e) => setNickname(e.target.value)}
-    placeholder="write your name"
-    className="w-full bg-slate-50 dark:bg-[#0f141e] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 focus:border-cyan-400 outline-none font-bold text-sm transition-all"
-  />
+  type="text"
+  required
+  value={nickname}
+  onChange={(e) => setNickname(e.target.value)}
+  placeholder="write your name"
+  className="w-full bg-slate-50 dark:bg-[#0f141e] text-slate-900 dark:text-white placeholder:text-slate-400 focus:placeholder:text-transparent px-4 py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 focus:border-cyan-400 outline-none font-bold text-sm transition-all"
+/>
 </div>
             {/* Primary Action Button */}
             <button
