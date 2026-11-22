@@ -564,9 +564,11 @@ export default function App() {
       </div>
 
       <div className="flex flex-col items-center w-full max-w-lg mx-auto px-4 pt-5">
-        <header className="w-full bg-white dark:bg-[#1a202c] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-lg mb-5 space-y-2.5">
-          <div className="flex justify-between items-center gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
+        <header className="w-full bg-white dark:bg-[#1a202c] px-3 sm:px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-lg mb-5 space-y-2.5">
+          {/* Top Row: Brand + Room Code + Action Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Left: Logo & Title */}
+            <div className="flex items-center gap-2 min-w-0">
               <div
                 onClick={() => {
                   if (isInActiveRoom) {
@@ -589,7 +591,7 @@ export default function App() {
                       setCurrentPhase('lobby');
                     }
                   }}
-                  className="font-black tracking-wider text-sm block leading-tight text-slate-800 dark:text-white cursor-pointer truncate"
+                  className="font-black tracking-wider text-xs sm:text-sm block leading-tight text-slate-800 dark:text-white cursor-pointer truncate"
                 >
                   WORD GLIMPSE
                 </span>
@@ -599,7 +601,7 @@ export default function App() {
                     type="button"
                     onClick={() => handleCopyRoomCode(room.roomCode)}
                     title="Click to copy room code"
-                    className="mt-0.5 inline-flex items-center gap-1.5 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                    className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 hover:bg-cyan-500/20 transition-all shrink-0 whitespace-nowrap cursor-pointer"
                   >
                     <span>#{room.roomCode}</span>
                     <span className="text-[9px] font-sans uppercase tracking-wider">
@@ -610,14 +612,15 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+            {/* Right: Controls */}
+            <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
               {isInActiveRoom && (
                 !isVoiceJoined ? (
                   <button
                     type="button"
                     onClick={joinVoice}
                     title="Join Voice Chat"
-                    className="text-[10px] px-2.5 py-2 rounded-xl font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer"
+                    className="text-[10px] px-2 sm:px-2.5 py-2 rounded-xl font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all shrink-0 whitespace-nowrap cursor-pointer"
                   >
                     🎙️ Voice
                   </button>
@@ -627,7 +630,7 @@ export default function App() {
                       type="button"
                       onClick={toggleMute}
                       title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
-                      className={`text-[10px] px-2.5 py-2 rounded-xl font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                      className={`text-[10px] px-2 sm:px-2.5 py-2 rounded-xl font-black uppercase tracking-wider border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                         isMuted
                           ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
                           : 'bg-emerald-500/20 text-emerald-500 border-emerald-500/40'
@@ -639,7 +642,7 @@ export default function App() {
                       type="button"
                       onClick={leaveVoice}
                       title="Leave Voice Chat"
-                      className="text-[10px] px-2 py-2 rounded-xl font-black bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:border-red-400 transition-all cursor-pointer"
+                      className="text-[10px] px-2 py-2 rounded-xl font-black bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:border-red-400 transition-all shrink-0 whitespace-nowrap cursor-pointer"
                     >
                       📵
                     </button>
@@ -651,7 +654,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={requestLeaveRoom}
-                  className="text-[10px] px-2.5 py-2 rounded-xl font-black uppercase tracking-wider bg-red-500/15 text-red-500 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-all cursor-pointer"
+                  className="text-[10px] px-2 sm:px-2.5 py-2 rounded-xl font-black uppercase tracking-wider bg-red-500/15 text-red-500 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-all shrink-0 whitespace-nowrap cursor-pointer"
                 >
                   Exit
                 </button>
@@ -661,7 +664,7 @@ export default function App() {
                 type="button"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 title="Toggle Light/Dark Mode"
-                className="p-2 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-cyan-400 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 transition-all text-xs font-bold cursor-pointer"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-cyan-400 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 transition-all text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer"
               >
                 {theme === 'dark' ? '🌙' : '☀️'}
               </button>
@@ -670,13 +673,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => navigateToSubPage('profile')}
-                  className={`text-[11px] px-3 py-2 rounded-xl font-bold border transition-all flex items-center gap-1.5 max-w-[130px] cursor-pointer ${
+                  className={`text-[11px] px-2.5 sm:px-3 py-2 rounded-xl font-bold border transition-all flex items-center gap-1 max-w-[105px] sm:max-w-[130px] shrink-0 cursor-pointer ${
                     currentPhase === 'profile'
                       ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]'
                       : 'bg-slate-100 dark:bg-[#0f141e] text-slate-700 dark:text-cyan-400 border-slate-200 dark:border-cyan-900/50 hover:bg-cyan-500/10'
                   }`}
                 >
-                  <span>{user.avatar}</span>
+                  <span className="shrink-0">{user.avatar}</span>
                   <span className="truncate">{user.name || 'Profile'}</span>
                 </button>
               )}
@@ -684,7 +687,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => navigateToSubPage('settings')}
-                className={`text-xs px-2.5 py-2 rounded-xl font-bold border transition-all cursor-pointer ${
+                className={`text-xs px-2.5 py-2 rounded-xl font-bold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                   currentPhase === 'settings'
                     ? 'bg-blue-600 text-white border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.4)]'
                     : 'bg-slate-100 dark:bg-[#0f141e] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800'
