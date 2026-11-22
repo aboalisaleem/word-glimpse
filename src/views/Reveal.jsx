@@ -40,13 +40,19 @@ export default function Reveal({ role, cardData, isKnown, onMarkKnown, onNext })
       )}
 
       {/* Proceed to 25s Peer Rating */}
-      <button
-        type="button"
-        onClick={onNext}
-        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] active:scale-95 text-xs tracking-widest uppercase transition-all"
-      >
-        Continue to 25s Clue-Giver Rating →
-      </button>
+      {role === 'cluegiver' ? (
+        <button
+          type="button"
+          onClick={onNext}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] active:scale-95 text-xs tracking-widest uppercase transition-all"
+        >
+          Feedback Time 25s
+        </button>
+      ) : (
+        <div className="w-full bg-slate-100 dark:bg-[#1a202c] text-slate-500 dark:text-slate-400 font-bold py-4 rounded-xl border border-slate-200 dark:border-slate-700/50 text-center text-xs tracking-widest uppercase">
+          ⏳ Waiting for Clue-Giver to continue...
+        </div>
+      )}
     </div>
   );
 }
